@@ -14,14 +14,15 @@
   }
   h1 { font-size: 22px; margin-bottom: 20px; }
   .row { display: flex; gap: 8px; flex-wrap: wrap; }
-  input {
+  input, textarea {
     font-size: 15px;
     padding: 9px 12px;
     border: 1px solid #d6d9de;
     border-radius: 8px;
     outline: none;
+    font-family: inherit;
   }
-  input:focus { border-color: #2b7cff; }
+  input:focus, textarea:focus { border-color: #2b7cff; }
   #item { flex: 1; min-width: 180px; }
   #money { width: 120px; }
   button {
@@ -34,6 +35,29 @@
     cursor: pointer;
   }
   button:hover { background: #1a66e0; }
+  .ghost {
+    background: #e9ecf1;
+    color: #555;
+    margin-top: 14px;
+  }
+  .ghost:hover { background: #dde1e8; }
+
+  /* 登录卡片 */
+  .panel {
+    background: #fff;
+    border-radius: 10px;
+    padding: 18px;
+    margin-bottom: 18px;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .panel p { margin: 0 0 4px; font-size: 14px; color: #555; width: 100%; }
+  .panel input { flex: 1; min-width: 150px; }
+  .msg { font-size: 13px; color: #c0392b; width: 100%; margin: 4px 0 0; min-height: 18px; }
+  .msg.ok { color: #1e8449; }
+
   #total {
     margin: 18px 0 8px;
     font-size: 16px;
@@ -52,27 +76,43 @@
     font-size: 15px;
     display: flex;
     justify-content: space-between;
+    align-items: center;
+    gap: 10px;
   }
+  li .del {
+    background: none;
+    color: #b0b7c3;
+    font-size: 13px;
+    padding: 4px 6px;
+    flex: none;
+  }
+  li .del:hover { color: #c0392b; background: none; }
   small {
     display: block;
     font-size: 12px;
     color: #98a0ac;
     margin-top: 3px;
   }
-  .ghost {
-    background: #e9ecf1;
-    color: #555;
-    margin-top: 14px;
+  .who { font-size: 13px; color: #667; margin: 0 0 16px; }
+  .who b { color: #222; }
+  .link {
+    background: none;
+    color: #2b7cff;
+    padding: 0 4px;
+    font-size: 13px;
   }
-  .ghost:hover { background: #dde1e8; }
+  .link:hover { background: none; text-decoration: underline; }
+  textarea { width: 100%; height: 110px; margin-top: 8px; }
 
   /* ===== 手机屏幕适配：屏幕窄了，输入框和按钮各占一整行 ===== */
   @media (max-width: 520px) {
     body { padding: 16px; }
     h1 { font-size: 20px; margin-bottom: 16px; }
-    input { font-size: 16px; }        /* 小于 16px 时 iPhone 会自动放大整页，很丑 */
+    input, textarea { font-size: 16px; }   /* 小于 16px 时 iPhone 会自动放大整页，很丑 */
     #item, #money { flex: 1 1 100%; width: 100%; min-width: 0; }
     .row button { width: 100%; }
+    .panel input { flex: 1 1 100%; width: 100%; }
+    .panel button { flex: 1; }
     li { display: block; }
     li b { display: block; margin-top: 6px; }
   }
@@ -82,31 +122,139 @@
 
   <h1>我的记账本</h1>
 
-  <div class="row">
-    <input id="item" placeholder="花在哪了（比如 午饭）">
-    <input id="money" type="number" placeholder="金额">
-    <button onclick="add()">记一笔</button>
+  <!-- ========== 第一块：登录 / 注册 ========== -->
+  <div class="panel" id="authBox">
+    <p>先登录，账本就会存到云端，换手机换电脑都能看到同一份账。</p>
+    <input id="email" type="email" placeholder="邮箱" autocomplete="username">
+    <input id="pwd" type="password" placeholder="密码（至少 6 位）" autocomplete="current-password">
+    <button onclick="login()">登录</button>
+    <button class="ghost" style="margin-top:0" onclick="signup()">注册</button>
+    <p class="msg" id="authMsg"></p>
   </div>
 
-  <p id="total">共 0 笔，合计 0 元</p>
-  <ul id="list"></ul>
-  <button class="ghost" onclick="clearAll()">清空全部</button>
+  <!-- ========== 第二块：记账（登录后才显示） ========== -->
+  <div id="appBox" style="display:none">
+
+    <p class="who">
+      已登录：<b id="whoEmail"></b>
+      <button class="link" onclick="logout()">退出登录</button>
+    </p>
+
+    <div class="row">
+      <input id="item" placeholder="花在哪了（比如 午饭）">
+      <input id="money" type="number" placeholder="金额">
+      <button onclick="add()">记一笔</button>
+    </div>
+
+    <p id="total">共 0 笔，合计 0 元</p>
+    <ul id="list"></ul>
+
+    <button class="ghost" onclick="clearAll()">清空全部</button>
+    <button class="ghost" onclick="exportBackup()">导出备份</button>
+    <button class="ghost" onclick="toggleImport()">导入备份</button>
+
+    <div id="importBox" style="display:none">
+      <textarea id="importText" placeholder="把之前导出的备份文字，整段粘到这里"></textarea>
+      <button onclick="doImport()">确定导入</button>
+    </div>
+
+    <p class="msg" id="appMsg"></p>
+  </div>
+
+  <!-- 云端服务的钥匙。这个 key 是公开的（只读权限由数据库里的 RLS 规则管），放在网页里没问题 -->
+  <script src="supabase.js"></script>
 
   <script>
-    // 一开始就把硬盘（浏览器本地存储）里的旧账读出来
-    let records = JSON.parse(localStorage.getItem("records") || "[]");
+    const SUPABASE_URL = "https://jrykjjhxfxdkntenilyd.supabase.co";
+    const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpyeWtqamh4Znhka250ZW5pbHlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU0MjUyMTcsImV4cCI6MjExMTAwMTIxN30.eEW940nO8CqJz6HB_4fZvPbbr4S10O5yhBLdXrLAZAg";
 
-    // 把 5 变成 "05"，这样 13:05 不会显示成 13:5
-    function pad(n) {
+    // 连上云端（相当于拿到一把通往数据库的钥匙）
+    const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+    let records = [];   // 当前显示的账目
+    let me = null;      // 当前登录的人
+
+    // ---------- 小工具 ----------
+    function pad(n) {                      // 5 变成 "05"
       if (n < 10) { return "0" + n; }
       return "" + n;
     }
-
-    // 取“现在”的日期时间，拼成  11/23 13:44  这样的样子
-    function nowText() {
+    function nowText() {                   // 拼成 11/23 13:44
       const d = new Date();
       return (d.getMonth() + 1) + "/" + d.getDate() + " " +
              pad(d.getHours()) + ":" + pad(d.getMinutes());
+    }
+    function say(id, text, ok) {           // 在提示行写字，ok=true 是绿色
+      const el = document.getElementById(id);
+      el.textContent = text || "";
+      el.className = "msg" + (ok ? " ok" : "");
+    }
+    // 把英文报错翻成人话
+    function cnError(msg) {
+      if (!msg) { return "出错了，再试一次。"; }
+      if (msg.indexOf("Invalid login credentials") >= 0) { return "邮箱或密码不对。"; }
+      if (msg.indexOf("already registered") >= 0) { return "这个邮箱已经注册过了，直接点「登录」。"; }
+      if (msg.indexOf("Password should be at least") >= 0) { return "密码太短，至少 6 位。"; }
+      if (msg.indexOf("valid email") >= 0) { return "邮箱格式不对。"; }
+      if (msg.indexOf("Failed to fetch") >= 0 || msg.indexOf("NetworkError") >= 0) {
+        return "网络连不上服务器，检查一下网再试。";
+      }
+      return msg;
+    }
+
+    // ---------- 登录 / 注册 / 退出 ----------
+    async function signup() {
+      const email = document.getElementById("email").value.trim();
+      const pwd = document.getElementById("pwd").value;
+      if (email === "" || pwd === "") { say("authMsg", "邮箱和密码都要填。"); return; }
+      say("authMsg", "正在注册…", true);
+      const r = await sb.auth.signUp({ email: email, password: pwd });
+      if (r.error) { say("authMsg", cnError(r.error.message)); return; }
+      if (r.data.session) {
+        await enterApp(r.data.session);
+      } else {
+        say("authMsg", "注册成功，先去邮箱点一下激活链接，再回来登录。", true);
+      }
+    }
+
+    async function login() {
+      const email = document.getElementById("email").value.trim();
+      const pwd = document.getElementById("pwd").value;
+      if (email === "" || pwd === "") { say("authMsg", "邮箱和密码都要填。"); return; }
+      say("authMsg", "正在登录…", true);
+      const r = await sb.auth.signInWithPassword({ email: email, password: pwd });
+      if (r.error) { say("authMsg", cnError(r.error.message)); return; }
+      await enterApp(r.data.session);
+    }
+
+    async function logout() {
+      await sb.auth.signOut();
+      me = null;
+      records = [];
+      document.getElementById("appBox").style.display = "none";
+      document.getElementById("authBox").style.display = "flex";
+      document.getElementById("pwd").value = "";
+      say("authMsg", "已经退出。", true);
+    }
+
+    // 登录成功之后要干的事：开门、显示是谁、把云端的账拉下来
+    async function enterApp(session) {
+      me = session.user;
+      document.getElementById("whoEmail").textContent = me.email;
+      document.getElementById("authBox").style.display = "none";
+      document.getElementById("appBox").style.display = "block";
+      await loadCloud();
+      await migrateLocal();
+    }
+
+    // ---------- 读云端 ----------
+    async function loadCloud() {
+      const r = await sb.from("records")
+        .select("id, item, money, time")
+        .order("created_at", { ascending: true });
+      if (r.error) { say("appMsg", "读云端失败：" + cnError(r.error.message)); return; }
+      records = r.data || [];
+      render();
     }
 
     function render() {
@@ -118,37 +266,114 @@
         const li = document.createElement("li");
         li.innerHTML = "<span>" + r.item +
           "<small>" + (r.time || "无时间") + "</small></span>" +
-          "<b>" + r.money + " 元</b>";
+          "<span><b>" + r.money + " 元</b></span>";
+        const del = document.createElement("button");
+        del.className = "del";
+        del.textContent = "删";
+        del.onclick = function () { removeRow(r.id); };
+        li.appendChild(del);
         list.appendChild(li);
-        total = total + r.money;
+        total = total + Number(r.money);
       }
       document.getElementById("total").innerHTML =
         "共 " + records.length + " 笔，合计 " + total + " 元";
     }
 
-    function add() {
+    // ---------- 写云端 ----------
+    async function add() {
       const item = document.getElementById("item").value.trim();
       const moneyText = document.getElementById("money").value;
-      if (item === "" || moneyText === "") {
-        alert("用途和金额都要填。");
-        return;
-      }
-      records.push({ item: item, money: Number(moneyText), time: nowText() });
-      localStorage.setItem("records", JSON.stringify(records));
+      if (item === "" || moneyText === "") { alert("用途和金额都要填。"); return; }
+
+      const r = await sb.from("records").insert({
+        user_id: me.id,
+        item: item,
+        money: Number(moneyText),
+        time: nowText()
+      }).select();
+      if (r.error) { say("appMsg", "存不上去：" + cnError(r.error.message)); return; }
+
+      records.push(r.data[0]);
       document.getElementById("item").value = "";
       document.getElementById("money").value = "";
+      say("appMsg", "已存到云端。", true);
       render();
     }
 
-    function clearAll() {
-      if (confirm("确定要清空全部记录吗？")) {
-        records = [];
-        localStorage.setItem("records", JSON.stringify(records));
-        render();
-      }
+    async function removeRow(id) {
+      const r = await sb.from("records").delete().eq("id", id);
+      if (r.error) { say("appMsg", "删不掉：" + cnError(r.error.message)); return; }
+      records = records.filter(function (x) { return x.id !== id; });
+      render();
     }
 
-    render();
+    async function clearAll() {
+      if (!confirm("确定要清空全部记录吗？（云端也会一起清）")) { return; }
+      const r = await sb.from("records").delete().eq("user_id", me.id);
+      if (r.error) { say("appMsg", "清空失败：" + cnError(r.error.message)); return; }
+      records = [];
+      render();
+      say("appMsg", "已清空。", true);
+    }
+
+    // ---------- 本机旧账搬家（第一次用云端时问一句） ----------
+    async function migrateLocal() {
+      let old = [];
+      try { old = JSON.parse(localStorage.getItem("records") || "[]"); } catch (e) { old = []; }
+      if (old.length === 0) { return; }
+      if (records.length > 0) { return; }  // 云端已经有账，就不搬了
+
+      if (!confirm("云端还没有账，本机存着 " + old.length + " 条旧记录，要一起传上去吗？")) { return; }
+
+      const rows = old.map(function (x) {
+        return { user_id: me.id, item: x.item, money: Number(x.money), time: x.time || nowText() };
+      });
+      const r = await sb.from("records").insert(rows).select();
+      if (r.error) { say("appMsg", "旧账上传失败：" + cnError(r.error.message)); return; }
+      localStorage.removeItem("records");   // 传成功了就把本机旧账删掉，免得以后重复搬
+      await loadCloud();
+      say("appMsg", "本机旧账已搬到云端。", true);
+    }
+
+    // ---------- 导出 / 导入备份 ----------
+    function exportBackup() {
+      const text = JSON.stringify(records, null, 2);
+      const blob = new Blob([text], { type: "application/json" });
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "记账备份-" + nowText().replace("/", "-").replace(" ", "-").replace(":", "") + ".json";
+      a.click();
+      URL.revokeObjectURL(a.href);
+    }
+
+    function toggleImport() {
+      const box = document.getElementById("importBox");
+      box.style.display = (box.style.display === "none" ? "block" : "none");
+    }
+
+    async function doImport() {
+      let data;
+      try { data = JSON.parse(document.getElementById("importText").value); }
+      catch (e) { say("appMsg", "备份文字格式不对，整段复制过来再试。"); return; }
+      if (!Array.isArray(data) || data.length === 0) { say("appMsg", "备份里没有记录。"); return; }
+
+      const rows = data.map(function (x) {
+        return { user_id: me.id, item: String(x.item || ""), money: Number(x.money || 0), time: x.time || nowText() };
+      });
+      const r = await sb.from("records").insert(rows).select();
+      if (r.error) { say("appMsg", "导入失败：" + cnError(r.error.message)); return; }
+
+      document.getElementById("importText").value = "";
+      document.getElementById("importBox").style.display = "none";
+      await loadCloud();
+      say("appMsg", "已导入 " + rows.length + " 条。", true);
+    }
+
+    // ---------- 一打开网页先看看有没有登录过 ----------
+    (async function start() {
+      const r = await sb.auth.getSession();
+      if (r.data && r.data.session) { await enterApp(r.data.session); }
+    })();
   </script>
 
 </body>
