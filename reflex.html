@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>测反射弧</title>
+<style>
+  body {
+    font-family: "Microsoft YaHei", sans-serif;
+    background: #12161f;
+    color: #e8eef7;
+    margin: 0;
+    padding: 24px;
+    user-select: none;
+  }
+  h1 { font-size: 20px; text-align: center; margin: 0 0 14px; font-weight: 600; }
+
+  /* ===== 主战场：一个大色块，点它 ===== */
+  .stage {
+    height: 44vh;
+    min-height: 280px;
+    border-radius: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.15s, box-shadow 0.15s;
+    background: #24303f;
+    box-shadow: inset 0 0 0 1px #33445599;
+  }
+  .stage .big { font-size: 40px; font-weight: 700; margin-bottom: 8px; }
+  .stage .sub { font-size: 15px; color: #9fb0c4; }
+
+  .stage.wait { background: #2b3a4d; }
+  .stage.go   { background: #14d07a; color: #06120b; box-shadow: 0 0 44px #14d07a88; }
+  .stage.go .sub { color: #0a2a18; }
+  .stage.bad  { background: #d9544f; box-shadow: 0 0 44px #d9544f88; }
+  .stage.over { background: #1b2431; }
+
+  .top {
+    max-width: 760px;
+    margin: 0 auto 10px;
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    color: #93a5ba;
+  }
+  .wrap { max-width: 760px; margin: 0 auto; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    margin-top: 10px;
+  }
+  .cell {
+    background: #1d2733;
+    border-radius: 10px;
+    padding: 10px;
+    text-align: center;
+    font-size: 13px;
+    color: #93a5ba;
+  }
+  .cell b { display: block; font-size: 17px; color: #e8eef7; margin-top: 4px; }
+
+  .verdict {
+    background: #1d2733;
+    border-radius: 12px;
+    padding: 14px 18px;
+    font-size: 15px;
+    line-height: 1.75;
+    margin-top: 10px;
+  }
+  .verdict b { color: #14d07a; }
+
+  .rounds { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .tag {
+    background: #1d2733;
+    border-radius: 8px;
+    padding: 6px 10px;
+    font-size: 13px;
+    color: #b8c6d6;
+  }
+  .tag.best { background: #14d07a22; color: #14d07a; }
+  .tag.foul { background: #d9544f22; color: #d9544f; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <h1>测反射弧 · 你的反应有多快</h1>
+
+  <div class="top">
+    <span id="progress">第 1 / 8 轮</span>
+    <span id="best">历史最佳：--</span>
+  </div>
+
+  <div class="stage" id="stage" onclick="handleClick()">
+    <div class="big" id="big">点击开始</div>
+    <div class="sub" id="sub">看到变绿就立刻点，一共 8 轮</div>
+  </div>
+
+  <div id="panel"></div>
+</div>
+
+<script>
+  // ============ 一、参数 ============
+  const ROUNDS = 8;            // 一共几轮
+  const MIN_WAIT = 1200;       // 最短等待（毫秒）
+  const MAX_WAIT = 4000;       // 最长等待（毫秒）
+
+  // ============ 二、状态：游戏此刻处于哪一步 ============
+  // idle 没开始 / waiting 等着变绿 / go 已变绿该点了 / cooldown 抢跑后缓一缓 / done 结束
+  let state = "idle";
+  let results = [];            // 每轮成绩（毫秒）
+  let fouls = 0;               // 抢跑次数
+  let round = 0;               // 当前第几轮
+  let goTime = 0;              // 变绿的那一瞬间
+  let timerId = null;          // 定时器编号，方便取消
+
+  // ============ 三、改画面 ============
+  function show(bigText, subText, className) {
+    document.getElementById("big").textContent = bigText;
+    document.getElementById("sub").textContent = subText;
+    document.getElementById("stage").className = "stage " + className;
+  }
+
+  function setProgress() {
+    const r = Math.min(round + 1, ROUNDS);
+    document.getElementById("progress").textContent = "第 " + r + " / " + ROUNDS + " 轮";
+  }
+
+  function showBest() {
+    const saved = localStorage.getItem("rtBest");
+    document.getElementById("best").textContent =
+      "历史最佳：--";
+    if (saved) {
+      const b = JSON.parse(saved);
+      document.getElementById("best").textContent =
+        "历史最佳：平均 " + b.avg + " ms（" + b.hits.length + " 轮）";
+    }
+  }
+
+  // ============ 四、开始整局 ============
+  function start() {
+    results = [];
+    fouls = 0;
+    round = 0;
+    document.getElementById("panel").innerHTML = "";
+    setProgress();
+    nextRound();
+  }
+
+  // ============ 五、开一轮：先等 1.2~4 秒的随机时间 ============
+  function nextRound() {
+    state = "waiting";
+    show("等…", "别急，等它变绿", "wait");
+    setProgress();
+
+    const delay = MIN_WAIT + Math.random() * (MAX_WAIT - MIN_WAIT);
+    timerId = setTimeout(function () {
+      // 时间到了 → 变绿
+      state = "go";
+      goTime = performance.now();     // 精确到小数点后的计时器
+      show("点！", "越快越好", "go");
+    }, delay);
+  }
+
+  // ============ 六、你的每一次点击都进这里 ============
+  function handleClick() {
+    if (state === "idle" || state === "done") {
+      start();
+      return;
+    }
+
+    if (state === "cooldown") { return; }   // 抢跑后短暂屏蔽
+
+    // 情况一：还是灰的，你提前点了 → 抢跑
+    if (state === "waiting") {
+      clearTimeout(timerId);            // 取消那个还没到点的定时器
+      state = "cooldown";
+      fouls = fouls + 1;
+      show("抢跑了", "变绿之前点不算，这轮重来", "bad");
+      setTimeout(nextRound, 1200);      // 1.2 秒后重新开这一轮
+      return;
+    }
+
+    // 情况二：绿的，你点中了 → 记成绩
+    if (state === "go") {
+      const rt = Math.round(performance.now() - goTime);
+      results.push(rt);
+      round = round + 1;
+
+      show(rt + " ms", "已记录，下一轮…", "over");
+
+      if (round >= ROUNDS) {
+        finish();
+      } else {
+        setTimeout(nextRound, 700);     // 留一点时间让你看清成绩
+      }
+      return;
+    }
+  }
+
+  // ============ 七、算总账 ============
+  function average(list) {
+    let sum = 0;
+    for (let i = 0; i < list.length; i++) {
+      sum = sum + list[i];
+    }
+    return Math.round(sum / list.length);
+  }
+
+  function grade(avg) {
+    if (avg < 170) { return "⚡ 神经反射级，快到不像人类"; }
+    if (avg < 210) { return "🔥 很快，有电竞天赋"; }
+    if (avg < 260) { return "🙂 不错，比一般人快"; }
+    if (avg < 320) { return "😐 普通水平，接近人类平均"; }
+    return "🐢 偏慢，休息一下再来";
+  }
+
+  function finish() {
+    state = "done";
+    show("测完了", "点这里再来一局", "over");
+    document.getElementById("progress").textContent = "8 轮完成";
+
+    let best = results[0];
+    let worst = results[0];
+    for (let i = 1; i < results.length; i++) {
+      if (results[i] < best) { best = results[i]; }
+      if (results[i] > worst) { worst = results[i]; }
+    }
+    const avg = average(results);
+
+    let tags = "";
+    for (let i = 0; i < results.length; i++) {
+      const cls = results[i] === best ? "tag best" : "tag";
+      tags = tags + '<span class="' + cls + '">第' + (i + 1) + '轮 ' + results[i] + ' ms</span>';
+    }
+    if (fouls > 0) {
+      tags = tags + '<span class="tag foul">抢跑 ' + fouls + ' 次</span>';
+    }
+
+    document.getElementById("panel").innerHTML =
+      '<div class="grid">' +
+        '<div class="cell">平均<b>' + avg + ' ms</b></div>' +
+        '<div class="cell">最快<b>' + best + ' ms</b></div>' +
+        '<div class="cell">最慢<b>' + worst + ' ms</b></div>' +
+        '<div class="cell">抢跑<b>' + fouls + ' 次</b></div>' +
+      '</div>' +
+      '<div class="verdict">评价：<b>' + grade(avg) + '</b><br>' +
+        '人类对"看见颜色变化后按一下"的平均反应大约 250 毫秒。' +
+      '</div>' +
+      '<div class="rounds">' + tags + '</div>';
+
+    // 存历史最佳（平均越小越好）
+    const saved = localStorage.getItem("rtBest");
+    if (!saved) {
+      localStorage.setItem("rtBest", JSON.stringify({ avg: avg, hits: results }));
+    } else {
+      const old = JSON.parse(saved);
+      if (avg < old.avg) {
+        localStorage.setItem("rtBest", JSON.stringify({ avg: avg, hits: results }));
+      }
+    }
+    showBest();
+  }
+
+  // ============ 八、启动 ============
+  showBest();
+</script>
+
+</body>
+</html>

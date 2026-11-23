@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2b7cff">
+<title>杜裕杰的记账本</title>
+<style>
+  body {
+    font-family: "Microsoft YaHei", sans-serif;
+    background: #f5f6f8;
+    padding: 32px;
+    color: #222;
+  }
+  h1 { font-size: 22px; margin-bottom: 20px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; }
+  input {
+    font-size: 15px;
+    padding: 9px 12px;
+    border: 1px solid #d6d9de;
+    border-radius: 8px;
+    outline: none;
+  }
+  input:focus { border-color: #2b7cff; }
+  #item { flex: 1; min-width: 180px; }
+  #money { width: 120px; }
+  button {
+    font-size: 15px;
+    padding: 9px 18px;
+    border: none;
+    border-radius: 8px;
+    background: #2b7cff;
+    color: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #1a66e0; }
+  #total {
+    margin: 18px 0 8px;
+    font-size: 16px;
+    font-weight: bold;
+  }
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  li {
+    background: #fff;
+    border-radius: 8px;
+    padding: 11px 14px;
+    margin-bottom: 8px;
+    font-size: 15px;
+    display: flex;
+    justify-content: space-between;
+  }
+  small {
+    display: block;
+    font-size: 12px;
+    color: #98a0ac;
+    margin-top: 3px;
+  }
+  .ghost {
+    background: #e9ecf1;
+    color: #555;
+    margin-top: 14px;
+  }
+  .ghost:hover { background: #dde1e8; }
+
+  /* ===== 手机屏幕适配：屏幕窄了，输入框和按钮各占一整行 ===== */
+  @media (max-width: 520px) {
+    body { padding: 16px; }
+    h1 { font-size: 20px; margin-bottom: 16px; }
+    input { font-size: 16px; }        /* 小于 16px 时 iPhone 会自动放大整页，很丑 */
+    #item, #money { flex: 1 1 100%; width: 100%; min-width: 0; }
+    .row button { width: 100%; }
+    li { display: block; }
+    li b { display: block; margin-top: 6px; }
+  }
+</style>
+</head>
+<body>
+
+  <h1>我的记账本</h1>
+
+  <div class="row">
+    <input id="item" placeholder="花在哪了（比如 午饭）">
+    <input id="money" type="number" placeholder="金额">
+    <button onclick="add()">记一笔</button>
+  </div>
+
+  <p id="total">共 0 笔，合计 0 元</p>
+  <ul id="list"></ul>
+  <button class="ghost" onclick="clearAll()">清空全部</button>
+
+  <script>
+    // 一开始就把硬盘（浏览器本地存储）里的旧账读出来
+    let records = JSON.parse(localStorage.getItem("records") || "[]");
+
+    // 把 5 变成 "05"，这样 13:05 不会显示成 13:5
+    function pad(n) {
+      if (n < 10) { return "0" + n; }
+      return "" + n;
+    }
+
+    // 取“现在”的日期时间，拼成  11/23 13:44  这样的样子
+    function nowText() {
+      const d = new Date();
+      return (d.getMonth() + 1) + "/" + d.getDate() + " " +
+             pad(d.getHours()) + ":" + pad(d.getMinutes());
+    }
+
+    function render() {
+      const list = document.getElementById("list");
+      list.innerHTML = "";
+      let total = 0;
+      for (let i = 0; i < records.length; i++) {
+        const r = records[i];
+        const li = document.createElement("li");
+        li.innerHTML = "<span>" + r.item +
+          "<small>" + (r.time || "无时间") + "</small></span>" +
+          "<b>" + r.money + " 元</b>";
+        list.appendChild(li);
+        total = total + r.money;
+      }
+      document.getElementById("total").innerHTML =
+        "共 " + records.length + " 笔，合计 " + total + " 元";
+    }
+
+    function add() {
+      const item = document.getElementById("item").value.trim();
+      const moneyText = document.getElementById("money").value;
+      if (item === "" || moneyText === "") {
+        alert("用途和金额都要填。");
+        return;
+      }
+      records.push({ item: item, money: Number(moneyText), time: nowText() });
+      localStorage.setItem("records", JSON.stringify(records));
+      document.getElementById("item").value = "";
+      document.getElementById("money").value = "";
+      render();
+    }
+
+    function clearAll() {
+      if (confirm("确定要清空全部记录吗？")) {
+        records = [];
+        localStorage.setItem("records", JSON.stringify(records));
+        render();
+      }
+    }
+
+    render();
+  </script>
+
+</body>
+</html>

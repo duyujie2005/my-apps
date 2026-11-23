@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>打地鼠</title>
+<style>
+  body {
+    font-family: "Microsoft YaHei", sans-serif;
+    background: #f5f6f8;
+    padding: 32px;
+    color: #222;
+    text-align: center;
+  }
+  h1 { font-size: 22px; margin-bottom: 10px; }
+  #bar {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 22px;
+    color: #444;
+  }
+  #board {
+    display: grid;
+    grid-template-columns: repeat(3, 96px);
+    gap: 12px;
+    justify-content: center;
+    margin-bottom: 22px;
+  }
+  .hole {
+    width: 96px;
+    height: 96px;
+    border-radius: 14px;
+    background: #e2e6ee;
+    font-size: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    user-select: none;
+  }
+  .hole.mole { background: #ffd166; }
+  button {
+    font-size: 15px;
+    padding: 10px 22px;
+    border: none;
+    border-radius: 8px;
+    background: #2b7cff;
+    color: #fff;
+    cursor: pointer;
+  }
+  button:hover { background: #1a66e0; }
+</style>
+</head>
+<body>
+
+  <h1>打地鼠</h1>
+  <p id="bar">得分 0 · 剩余 30 秒 · 最高 0</p>
+  <div id="board"></div>
+  <button onclick="startGame()">开始游戏</button>
+
+  <script>
+    const HOLES = 9;          // 一共 9 个洞
+    const board = document.getElementById("board");
+
+    let score = 0;            // 得分
+    let left = 30;            // 剩余秒数
+    let moleIndex = -1;       // 现在哪个洞里有老鼠，-1 表示没有
+    let running = false;      // 游戏是否正在进行
+    let moleTimer = null;     // 放老鼠的定时器
+    let countTimer = null;    // 倒计时的定时器
+
+    // 先造出 9 个洞，并给每个洞装一个“被点击”的反应
+    for (let i = 0; i < HOLES; i++) {
+      const div = document.createElement("div");
+      div.className = "hole";
+      div.onclick = function () {
+        if (!running) { return; }          // 没开始就点，不理
+        if (i === moleIndex) {             // 点中的正是有老鼠的那个洞
+          score = score + 1;
+          clearMole();
+          update();
+        }
+      };
+      board.appendChild(div);
+    }
+
+    function update() {
+      const best = Number(localStorage.getItem("best") || 0);
+      document.getElementById("bar").textContent =
+        "得分 " + score + " · 剩余 " + left + " 秒 · 最高 " + best;
+    }
+
+    function clearMole() {
+      const holes = board.children;
+      for (let i = 0; i < holes.length; i++) {
+        holes[i].classList.remove("mole");
+        holes[i].textContent = "";
+      }
+      moleIndex = -1;
+    }
+
+    function popMole() {
+      clearMole();
+      moleIndex = Math.floor(Math.random() * HOLES);   // 0 到 8 之间随机一个
+      const hole = board.children[moleIndex];
+      hole.classList.add("mole");
+      hole.textContent = "🐹";
+    }
+
+    function startGame() {
+      if (running) { return; }           // 正在玩就别重复开始
+      running = true;
+      score = 0;
+      left = 30;
+      update();
+      moleTimer = setInterval(popMole, 700);       // 每 0.7 秒冒一只
+      countTimer = setInterval(function () {
+        left = left - 1;
+        if (left <= 0) {
+          endGame();
+        } else {
+          update();
+        }
+      }, 1000);                                  // 每 1 秒减 1
+    }
+
+    function endGame() {
+      running = false;
+      clearInterval(moleTimer);
+      clearInterval(countTimer);
+      clearMole();
+      const best = Number(localStorage.getItem("best") || 0);
+      if (score > best) {
+        localStorage.setItem("best", score);      // 破纪录就存下来
+      }
+      update();
+      alert("时间到！你打了 " + score + " 只老鼠。");
+    }
+
+    update();
+  </script>
+
+</body>
+</html>
