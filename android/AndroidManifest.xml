@@ -6,6 +6,7 @@
 
     <application
         android:label="软件柜"
+        android:icon="@mipmap/ic_launcher"
         android:supportsRtl="true"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
