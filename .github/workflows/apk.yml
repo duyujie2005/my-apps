@@ -33,11 +33,13 @@ jobs:
             yes | "$SM" --licenses > /dev/null 2>&1 || true
             "$SM" "platforms;android-34" "build-tools;34.0.0" > /dev/null
           fi
-          mkdir -p build/classes build/dex build/pack
+          mkdir -p build/classes build/dex build/pack android/res/mipmap-xxxhdpi
+          curl -fsSL --retry 3 -o android/res/mipmap-xxxhdpi/ic_launcher.png https://duyujie2005.github.io/my-apps/icon-192.png
+          "$BT/aapt2" compile -o build/res.zip --dir android/res
           javac -source 8 -target 8 -Xlint:-options -classpath "$PLAT" -d build/classes android/MainActivity.java
           "$BT/d8" --lib "$PLAT" --min-api 21 --output build/dex $(find build/classes -name '*.class')
           cp build/dex/classes.dex build/pack/classes.dex
-          "$BT/aapt2" link -o build/base.apk -I "$PLAT" --manifest android/AndroidManifest.xml --min-sdk-version 21 --target-sdk-version 34 --version-code 1 --version-name 1.0
+          "$BT/aapt2" link -o build/base.apk -I "$PLAT" --manifest android/AndroidManifest.xml -R build/res.zip --auto-add-overlay --min-sdk-version 21 --target-sdk-version 34 --version-code 1 --version-name 1.0
           ( cd build/pack && zip -q ../base.apk classes.dex )
           "$BT/zipalign" -f 4 build/base.apk build/aligned.apk
           keytool -genkeypair -keystore build/key.jks -alias app -keyalg RSA -keysize 2048 -validity 10000 -storepass duobaoshelf -keypass duobaoshelf -dname "CN=Du Yujie, O=Shelf, C=CN" > /dev/null 2>&1
@@ -56,3 +58,13 @@ jobs:
         run: |
           gh release view apk-latest --repo $GITHUB_REPOSITORY > /dev/null 2>&1 || gh release create apk-latest --repo $GITHUB_REPOSITORY --title "手机安装包" --notes "安卓安装包（脚本自动构建）"
           gh release upload apk-latest build/app.apk --repo $GITHUB_REPOSITORY --clobber
+
+      - name: Copy apk to the site
+        run: |
+          set -e
+          cp build/app.apk app.apk
+          git config user.name "apk-bot"
+          git config user.email "apk-bot@users.noreply.github.com"
+          git add app.apk
+          git commit -m "update app.apk" || echo "no change"
+          git push
