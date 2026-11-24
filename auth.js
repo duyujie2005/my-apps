@@ -70,7 +70,7 @@
       }).catch(function () {});
       window.SYNC.profile().then(function (p) {
         if (!p) { return; }
-        av.textContent = p.avatar || "👤";
+        av.innerHTML = window.AV ? window.AV(p.avatar, 18) : (p.avatar || "👤");
         nm.textContent = p.nick || nm.textContent;
       }).catch(function () {});
     }
@@ -102,6 +102,17 @@
     }
   }
 })();
+
+// 头像渲染：以 data:image 开头就当成图片，否则当成表情（所有页面共用）
+window.AV = function (a, px) {
+  var size = px || 22;
+  if (typeof a === "string" && a.indexOf("data:image") === 0) {
+    return '<img src="' + a.replace(/"/g, "&quot;") + '" alt="" style="width:' + size + 'px;height:' + size +
+      'px;border-radius:50%;object-fit:cover;flex:none;vertical-align:middle;display:inline-block">';
+  }
+  return '<span style="font-size:' + Math.round(size * 0.92) + 'px;line-height:1;display:inline-block">' +
+    (a || "🙂") + '</span>';
+};
 
 // ---------- 云端同步（跨设备：题库掌握/错题、游戏榜单） ----------
 // 依赖 supabase.js；没加载就动态补上。没登录或不联网时自动退回本机存储。
@@ -304,6 +315,64 @@
             if (x.error.code === "23505") { return true; }
             throw x.error;
           }
+          return true;
+        });
+      });
+    },
+    // ---------- 大世界（公共留言墙，所有账号都能看到） ----------
+    worldList: function (limit) {
+      return ensure().then(function (sb) {
+        if (!sb) { return []; }
+        return sb.from("world_msgs").select("id,user_id,body,created_at")
+          .order("id", { ascending: false }).limit(limit || 60)
+          .then(function (x) {
+            if (x.error) { throw x.error; }
+            return (x.data || []).slice().reverse();
+          });
+      }).catch(function () { return []; });
+    },
+    worldSend: function (body) {
+      return withSession(function (sb, se) {
+        return sb.from("world_msgs").insert({ user_id: se.user.id, body: body }).then(function (x) {
+          if (x.error) { throw x.error; }
+          return true;
+        });
+      });
+    },
+    worldDelete: function (id) {
+      return withSession(function (sb, se) {
+        return sb.from("world_msgs").delete().eq("id", id).eq("user_id", se.user.id).then(function (x) {
+          if (x.error) { throw x.error; }
+          return true;
+        });
+      });
+    },
+    // 我屏蔽了谁（这些人的大世界消息我不看）
+    blockedIds: function () {
+      return withSession(function (sb, se) {
+        return sb.from("blocks").select("target").eq("owner", se.user.id).then(function (x) {
+          var out = {};
+          (x.data || []).forEach(function (r) { out[r.target] = 1; });
+          return out;
+        });
+      }).then(function (o) { return o || {}; }).catch(function () { return {}; });
+    },
+    blockUser: function (uid) {
+      return withSession(function (sb, se) {
+        if (uid === se.user.id) { throw new Error("不能屏蔽自己"); }
+        return sb.from("blocks").insert({ owner: se.user.id, target: uid }).then(function (x) {
+          if (x.error) {
+            if (x.error.code === "23505") { return true; }
+            throw x.error;
+          }
+          return true;
+        });
+      });
+    },
+    unblockUser: function (uid) {
+      return withSession(function (sb, se) {
+        return sb.from("blocks").delete().eq("owner", se.user.id).eq("target", uid).then(function (x) {
+          if (x.error) { throw x.error; }
           return true;
         });
       });

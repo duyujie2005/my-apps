@@ -39,6 +39,18 @@
   </div>
 
   <div class="card">
+    <h2>用照片当头像</h2>
+    <div class="row" style="align-items:center;gap:12px;margin-top:0">
+      <div id="phPrev" style="width:56px;height:56px;border-radius:50%;background:#eaf2ff;border:1px solid #dfe4ec;display:flex;align-items:center;justify-content:center;font-size:26px;overflow:hidden"></div>
+      <div style="flex:1">
+        <button class="main" id="pick" type="button">选一张照片</button>
+        <div class="hint">会自动裁成圆形、压到很小再保存，手机电脑都清楚；不想用照片就上面挑表情。</div>
+      </div>
+    </div>
+    <input type="file" id="file" accept="image/*" style="display:none">
+  </div>
+
+  <div class="card">
     <h2>我的名字</h2>
     <div class="row">
       <input type="text" id="nick" maxlength="12" placeholder="起个名字，最多 12 个字">
@@ -61,6 +73,7 @@
     <div class="links">
       <a href="index.html">软件柜首页</a>
       <a href="friends.html">好友 / 聊天 / PK</a>
+      <a href="world.html">大世界</a>
       <a href="whack.html">打地鼠</a>
       <a href="reflex.html">反射弧</a>
     </div>
@@ -91,6 +104,42 @@
       b.onclick = function () { chosen = e; paint(); };
       box.appendChild(b);
     });
+    var pp = document.getElementById("phPrev");
+    pp.innerHTML = window.AV ? window.AV(chosen, 52) : chosen;
+    pp.style.background = (typeof chosen === "string" && chosen.indexOf("data:image") === 0) ? "#fff" : "#eaf2ff";
+  }
+
+  // 选照片：裁成正方形 → 缩到 96×96 → 压成很小的 JPEG
+  function handleFile(file) {
+    if (!file) { return; }
+    if (!/^image\//.test(file.type)) { toast("请选图片文件（jpg / png 都行）"); return; }
+    var url = URL.createObjectURL(file);
+    var img = new Image();
+    img.onload = function () {
+      try {
+        var side = Math.min(img.width, img.height);
+        var sx = (img.width - side) / 2;
+        var sy = (img.height - side) / 2;
+        var cv = document.createElement("canvas");
+        cv.width = 96; cv.height = 96;
+        var cx = cv.getContext("2d");
+        cx.drawImage(img, sx, sy, side, side, 0, 0, 96, 96);
+        var out = cv.toDataURL("image/jpeg", 0.75);
+        if (out.length > 60000) {
+          cv.width = 80; cv.height = 80;
+          cx.drawImage(img, sx, sy, side, side, 0, 0, 80, 80);
+          out = cv.toDataURL("image/jpeg", 0.6);
+        }
+        chosen = out;
+        paint();
+        toast("照片已选好，点「保存」就生效");
+      } catch (e) {
+        toast("这张图读不出来，换一张试试");
+      }
+      URL.revokeObjectURL(url);
+    };
+    img.onerror = function () { toast("这张图打不开，换一张试试"); URL.revokeObjectURL(url); };
+    img.src = url;
   }
 
   paint();
@@ -103,7 +152,7 @@
     SYNC.profile(true).then(function (p) {
       if (!p) { return; }
       chosen = p.avatar || "🙂";
-      if (AVATARS.indexOf(chosen) < 0) { AVATARS.unshift(chosen); }
+      if (chosen.indexOf("data:image") !== 0 && AVATARS.indexOf(chosen) < 0) { AVATARS.unshift(chosen); }
       paint();
       document.getElementById("nick").value = p.nick || "";
       document.getElementById("code").textContent = p.code || "先去「好友」页逛一下";
@@ -111,6 +160,9 @@
   }
 
   var btn = document.getElementById("save");
+  var fileEl = document.getElementById("file");
+  document.getElementById("pick").onclick = function () { fileEl.value = ""; fileEl.click(); };
+  fileEl.onchange = function () { handleFile(fileEl.files && fileEl.files[0]); };
   btn.onclick = function () {
     var nick = document.getElementById("nick").value.trim().slice(0, 12);
     if (!nick) { toast("名字不能是空的"); return; }

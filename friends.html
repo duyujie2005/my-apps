@@ -83,13 +83,26 @@
   }
   .toast.on { opacity: 1; }
   .duelbtn { display: block; width: 100%; margin-top: 6px; text-align: left; background: #1a2b1f; border-color: #2c4a33; }
+  /* 微信式聊天气泡 */
+  .mrow { display: flex; gap: 8px; align-items: flex-start; margin: 8px 0; }
+  .mrow.me { flex-direction: row-reverse; }
+  .mrow .avw { flex: none; width: 32px; height: 32px; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; background: #1b2637; }
+  .mrow .col { min-width: 0; max-width: 78%; }
+  .mrow.me .col { display: flex; flex-direction: column; align-items: flex-end; }
+  .nm2 { font-size: 11px; color: var(--dim); margin-bottom: 3px; }
+  .mrow .b { max-width: 100%; margin: 0; border-radius: 10px; }
+  .tc { text-align: center; color: #6f8199; font-size: 11px; margin: 12px 0 4px; }
+  .rowtime { margin-left: auto; font-size: 11px; color: var(--dim); flex: none; }
 </style>
 </head>
 <body data-guard="1">
 <div class="wrap">
   <div class="top">
     <a class="back" href="index.html">← 软件柜</a>
-    <span class="chip" id="who">未登录</span>
+    <div style="display:flex;gap:8px;align-items:center">
+      <a class="chip" href="world.html">🌍 大世界</a>
+      <span class="chip" id="who">未登录</span>
+    </div>
   </div>
   <h1>好友 · 聊天 · PK</h1>
   <p class="sub">先把好友号发给同学，他输入就能加你。加完可以聊天，也可以互相 PK 打地鼠和测反射弧。</p>
@@ -130,6 +143,7 @@
 
 <div class="sheet" id="sheet">
   <div class="sheetTop">
+    <div class="avw" id="chatAva" style="width:34px;height:34px"></div>
     <div class="who"><b id="chatName">好友</b><small id="chatCode"></small></div>
     <button id="btnClose" class="ghost">关闭</button>
   </div>
@@ -145,6 +159,7 @@
 </div>
 <div class="toast" id="toast"></div>
 
+<script src="auth.js"></script>
 <script src="supabase.js"></script>
 <script>
   const SUPABASE_URL = "https://jrykjjhxfxdkntenilyd.supabase.co";
@@ -178,6 +193,27 @@
 
   function nameOf(p, fallback) { return (p && p.nick) || fallback || "好友"; }
 
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  function pad2(n) { return n < 10 ? "0" + n : "" + n; }
+
+  function shortTime(ts) {
+    const d = new Date(ts), now = new Date();
+    if (d.toDateString() === now.toDateString()) { return pad2(d.getHours()) + ":" + pad2(d.getMinutes()); }
+    return (d.getMonth() + 1) + "/" + d.getDate() + " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+  }
+
+  function timeLabel(ts) {
+    const d = new Date(ts), now = new Date();
+    const hm = pad2(d.getHours()) + ":" + pad2(d.getMinutes());
+    if (d.toDateString() === now.toDateString()) { return "今天 " + hm; }
+    return (d.getMonth() + 1) + "月" + d.getDate() + "日 " + hm;
+  }
+
   async function boot() {
     sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
     const res = await sb.auth.getSession();
@@ -187,6 +223,8 @@
     document.getElementById("who").textContent = "👤 " + (me.email || "").split("@")[0];
     if (window.AUTH) { AUTH.setUser(me.email); }
     await ensureProfile();
+    document.getElementById("who").innerHTML =
+      (window.AV ? window.AV((myProfile && myProfile.avatar) || "🙂", 16) : "") + " " + esc(nameOf(myProfile, "我"));
     await Promise.all([loadFriends(), loadMessages(), loadDuels()]);
     await submitPendingDuel();
     renderAll();
@@ -218,7 +256,7 @@
     const ids = (r.data || []).map(function (x) { return x.owner === me.id ? x.friend : x.owner; });
     friends = ids.map(function (id) { return { id: id }; });
     if (ids.length) {
-      const p = await sb.from("profiles").select("id,code,nick").in("id", ids);
+      const p = await sb.from("profiles").select("id,code,nick,avatar").in("id", ids);
       profiles = {};
       (p.data || []).forEach(function (x) { profiles[x.id] = x; });
     }
@@ -298,12 +336,14 @@
       const p = profiles[f.id] || {};
       const last = lastMsgOf(f.id);
       const un = unreadOf(f.id);
-      const letter = (nameOf(p, "友")[0] || "友").toUpperCase();
+      const av = window.AV ? window.AV(p.avatar, 38) : esc((nameOf(p, "友")[0] || "友").toUpperCase());
+      const tm = last ? shortTime(new Date(last.created_at).getTime()) : "";
       return '<div class="fr" data-id="' + f.id + '">' +
-        '<div class="ava">' + letter + '</div>' +
-        '<div class="info"><div class="nm">' + nameOf(p, "好友") +
+        '<div class="ava" style="overflow:hidden">' + av + '</div>' +
+        '<div class="info"><div class="nm">' + esc(nameOf(p, "好友")) +
           (un ? ' <span class="dot">' + un + '</span>' : "") + '</div>' +
-          '<div class="ms">' + (last ? last.body.replace(/</g, "&lt;") : "好友号 " + (p.code || "------")) + '</div></div>' +
+          '<div class="ms">' + (last ? esc(last.body) : "好友号 " + (p.code || "------")) + '</div></div>' +
+        '<span class="rowtime">' + tm + '</span>' +
         '<button class="ghost" data-open="' + f.id + '">聊天</button></div>';
     }).join("");
     box.querySelectorAll("[data-open]").forEach(function (b) {
@@ -371,9 +411,12 @@
 
   function openChat(fid) {
     const p = profiles[fid] || {};
-    current = { id: fid, nick: nameOf(p, "好友"), code: p.code || "------" };
+    current = { id: fid, nick: nameOf(p, "好友"), code: p.code || "------", avatar: p.avatar || "🙂" };
     document.getElementById("chatName").textContent = current.nick;
     document.getElementById("chatCode").textContent = "好友号 " + current.code;
+    const ca = document.getElementById("chatAva");
+    ca.innerHTML = window.AV ? window.AV(current.avatar, 34) : "";
+    ca.style.overflow = "hidden";
     document.getElementById("sheet").classList.add("on");
     document.getElementById("sheet").style.zIndex = 50;
     renderChat();
@@ -416,21 +459,36 @@
       box.innerHTML = '<div class="b sys">还没有消息，说句话打招呼吧～</div>';
       return;
     }
-    box.innerHTML = items.map(function (it) {
+    const myAv = window.AV ? window.AV((myProfile && myProfile.avatar) || "🙂", 32) : "我";
+    const otherP = profiles[current.id] || {};
+    const otherAv = window.AV ? window.AV(otherP.avatar || "🙂", 32) : esc((otherP.nick || "好友")[0] || "友");
+    let lastTs = 0;
+    let html = "";
+    items.forEach(function (it) {
+      if (it.ts - lastTs > 5 * 60 * 1000) { html += '<div class="tc">' + timeLabel(it.ts) + '</div>'; }
+      lastTs = it.ts;
       if (it.kind === "duel") {
         const d = it.duel;
         const role = myRole(d);
         const played = role === "c" ? d.c_score !== null : d.o_score !== null;
-        const meId = d.challenger === me.id ? "我发起" : "对手发起";
+        const who = d.challenger === me.id ? "我发起" : "对手发起";
         let btn = "";
         if (role === "o" && !played && d.status !== "done") {
           btn = '<button class="duelbtn" data-play="' + d.id + '" data-game="' + d.game + '">去打一局 →</button>';
         }
-        return '<div class="b card-duel">🏆 PK ' + GAMES[d.game] + ' · ' + meId +
+        html += '<div class="b card-duel">🏆 PK ' + GAMES[d.game] + ' · ' + who +
           '<div class="ln">' + duelLine(d) + '</div>' + btn + '</div>';
+        return;
       }
-      return '<div class="b ' + it.kind + '">' + String(it.text).replace(/</g, "&lt;") + '</div>';
-    }).join("");
+      const mine = it.kind === "me";
+      html += '<div class="mrow' + (mine ? " me" : "") + '">' +
+        '<span class="avw">' + (mine ? myAv : otherAv) + '</span>' +
+        '<div class="col">' +
+          (mine ? "" : '<div class="nm2">' + esc(otherP.nick || "好友") + '</div>') +
+          '<div class="b ' + it.kind + '">' + esc(it.text) + '</div>' +
+        '</div></div>';
+    });
+    box.innerHTML = html;
     box.querySelectorAll("[data-play]").forEach(function (b) {
       b.addEventListener("click", function () {
         goGame(b.getAttribute("data-play"), "o", b.getAttribute("data-game"));
@@ -469,11 +527,11 @@
     box.innerHTML = '<div class="empty">查找中…</div>';
     let row = null;
     if (/^\d{6}$/.test(q)) {
-      const r = await sb.from("profiles").select("id,code,nick").eq("code", q).maybeSingle();
+      const r = await sb.from("profiles").select("id,code,nick,avatar").eq("code", q).maybeSingle();
       row = r.data;
     } else if (q.indexOf("@") > 0) {
       const h = await sha256(q.toLowerCase());
-      const r = await sb.from("profiles").select("id,code,nick").eq("email_hash", h).maybeSingle();
+      const r = await sb.from("profiles").select("id,code,nick,avatar").eq("email_hash", h).maybeSingle();
       row = r.data;
     } else {
       box.innerHTML = '<div class="empty">好友号是 6 位数字；也可以直接填对方邮箱。</div>';
@@ -482,8 +540,9 @@
     if (!row) { box.innerHTML = '<div class="empty">没找到这个人。确认好友号或邮箱没写错，而且他已经登录过一次这个软件柜。</div>'; return; }
     if (row.id === me.id) { box.innerHTML = '<div class="empty">这是你自己呀～</div>'; return; }
     if (friends.some(function (f) { return f.id === row.id; })) { box.innerHTML = '<div class="empty">他已经是你的好友了，直接点“聊天”。</div>'; return; }
-    box.innerHTML = '<div class="fr" style="border:0"><div class="ava">' + (row.nick[0] || "友") + '</div>' +
-      '<div class="info"><div class="nm">' + row.nick + '</div><div class="ms">好友号 ' + row.code + '</div></div>' +
+    box.innerHTML = '<div class="fr" style="border:0"><div class="ava" style="overflow:hidden">' +
+      (window.AV ? window.AV(row.avatar || "🙂", 38) : esc((row.nick || "友")[0])) + '</div>' +
+      '<div class="info"><div class="nm">' + esc(row.nick || "好友") + '</div><div class="ms">好友号 ' + row.code + '</div></div>' +
       '<button class="primary" id="btnAdd">加好友</button></div>';
     document.getElementById("btnAdd").addEventListener("click", async function () {
       const r = await sb.from("friends").insert({ owner: me.id, friend: row.id });

@@ -257,7 +257,7 @@
         box.innerHTML = rows.map(function (r, i) {
           const p = prof[r.user_id] || {};
           const nm = esc(p.nick || r.name || "玩家");
-          const avv = esc(p.avatar || "🙂");
+          const avv = window.AV ? window.AV(p.avatar, 22) : esc(p.avatar || "🙂");
           const mine = !!(me.id && r.user_id === me.id);
           let act;
           if (mine) { act = '<span style="font-size:11px;color:#2b7cff">我</span>'; }
