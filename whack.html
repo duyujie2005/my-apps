@@ -229,7 +229,27 @@
       localStorage.setItem("whackBest", String(rec.score));
     }
     syncPush();
+    try {
+      if (window.SYNC) { window.SYNC.submitScore("whack", rec.score, null, { avg: rec.avg }); }
+    } catch (e) {}
     return top;
+  }
+
+  // 全站榜单：所有账号（包括新注册的）都能看到，并显示是谁打的
+  function renderGlobal() {
+    if (!window.SYNC) { return; }
+    window.SYNC.topScores("whack", 8, false).then(function (rows) {
+      if (!rows || !rows.length) { return; }
+      const box = document.getElementById("boardList");
+      box.innerHTML = rows.map(function (r, i) {
+        return '<div class="row">' +
+          '<span class="rk' + (i === 0 ? " g" : "") + '">' + (i + 1) + '</span>' +
+          '<span class="nm" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (r.name || "玩家") + '</span>' +
+          '<span class="sc">' + Math.round(r.score) + ' 只</span></div>';
+      }).join("");
+      const tip = document.getElementById("boardTip");
+      if (tip) { tip.textContent = "全站前 8 名 · 所有账号都能看到"; }
+    }).catch(function () {});
   }
 
   // ---------- 跨设备同步：登录同一账号，榜单跟着账号走 ----------
@@ -368,6 +388,7 @@
     document.getElementById("result").style.display = "block";
     document.getElementById("result").scrollIntoView({ behavior: "smooth", block: "center" });
     renderBoard(ts);
+    renderGlobal();
     document.getElementById("boardTip").textContent = rank > 0 ? "这局排第 " + rank : "本机前 5 名";
     if (DUEL) {
       try {
@@ -382,6 +403,7 @@
   hud();
   renderBoard();
   syncPull();
+  renderGlobal();
   if ("serviceWorker" in navigator) { navigator.serviceWorker.register("sw.js").catch(function () {}); }
 </script>
 </body>

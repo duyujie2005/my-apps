@@ -149,6 +149,38 @@
           return true;
         });
       });
+    },
+    // 传一局成绩到全站榜单（会显示是谁打的）
+    submitScore: function (game, score, valid, extra) {
+      return withSession(function (sb, se) {
+        var name = ((se.user.email || "").split("@")[0]) || "玩家";
+        return sb.from("scores").insert({
+          user_id: se.user.id,
+          game: game,
+          name: name,
+          score: score,
+          valid: (valid === undefined ? null : valid),
+          extra: extra || {}
+        }).then(function (x) {
+          if (x.error) { throw x.error; }
+          return true;
+        });
+      });
+    },
+    // 取全站榜：ascending=true 时小的排前面（反射弧用）
+    topScores: function (game, n, ascending) {
+      return ensure().then(function (sb) {
+        if (!sb) { return []; }
+        return sb.from("scores")
+          .select("name,score,valid,created_at")
+          .eq("game", game)
+          .order("score", { ascending: !!ascending })
+          .limit(n || 10)
+          .then(function (x) {
+            if (x.error) { throw x.error; }
+            return x.data || [];
+          });
+      }).catch(function () { return []; });
     }
   };
 })();
