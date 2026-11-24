@@ -122,6 +122,7 @@
     li b { display: block; margin-top: 6px; }
   }
 </style>
+<script src="auth.js" data-guard="1"></script>
 </head>
 <body>
 
@@ -234,6 +235,7 @@
 
     async function logout() {
       await sb.auth.signOut();
+      try { AUTH.clear(); } catch (e) {}
       me = null;
       records = [];
       document.getElementById("appBox").style.display = "none";
@@ -245,6 +247,7 @@
     // 登录成功之后要干的事：开门、显示是谁、把云端的账拉下来
     async function enterApp(session) {
       me = session.user;
+      try { AUTH.setUser(me.email); } catch (e) {}
       document.getElementById("whoEmail").textContent = me.email;
       document.getElementById("authBox").style.display = "none";
       document.getElementById("appBox").style.display = "block";
