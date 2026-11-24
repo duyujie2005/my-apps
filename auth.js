@@ -43,9 +43,19 @@
     el.style.cssText = "position:fixed;right:12px;top:10px;z-index:20;font-size:12px;color:#6b7481;" +
       "background:#fff;border:1px solid #e3e7ee;border-radius:16px;padding:5px 10px;box-shadow:0 2px 8px #0000000f;";
     var name = me.email.split("@")[0];
-    el.innerHTML = "👤 " + name + ' <a href="javascript:void 0" style="color:#2b7cff;text-decoration:none;margin-left:6px">退出</a>';
+    el.innerHTML = "👤 " + name + ' <span style="color:#8a929e">· 检测中…</span> <a href="javascript:void 0" style="color:#2b7cff;text-decoration:none;margin-left:6px">退出</a>';
     el.querySelector("a").onclick = function () { logout(); };
     document.body.appendChild(el);
+
+    // 显示"记录是否已跟账号同步"，让人一眼看得出来
+    if (window.SYNC) {
+      window.SYNC.online().then(function (ok) {
+        var tag = el.querySelector("span");
+        if (!tag) { return; }
+        tag.textContent = ok ? "· ☁️已同步" : "· 仅本机";
+        tag.style.color = ok ? "#2e9e63" : "#c8862a";
+      }).catch(function () {});
+    }
   }
 
   function logout() {
