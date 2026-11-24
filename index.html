@@ -2,8 +2,8 @@
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#101521">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1420">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -11,76 +11,214 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>杜裕杰的软件柜</title>
 <style>
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
     margin: 0;
-    padding: 22px 16px 40px;
+    padding: 0 16px 40px;
     font-family: "Microsoft YaHei", -apple-system, "PingFang SC", sans-serif;
-    background: #101521;
+    background: #0f1420;
     color: #e9eef7;
   }
-  h1 { font-size: 20px; margin: 0 0 6px; }
-  .tip { font-size: 13px; color: #8ea0b8; margin: 0 0 20px; line-height: 1.6; }
-  a.card {
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    background: #1b2432;
-    border-radius: 14px;
-    padding: 16px 18px;
-    margin-bottom: 12px;
-    text-decoration: none;
-    color: #e9eef7;
-    transition: background 0.15s, transform 0.15s;
+  .hero {
+    margin: 0 -16px 18px;
+    padding: 26px 20px 22px;
+    background: radial-gradient(120% 120% at 15% 0%, #24406e 0%, #16233a 45%, #0f1420 100%);
+    border-bottom: 1px solid #22304a;
   }
-  a.card:active { background: #253246; transform: scale(0.98); }
-  .icon { font-size: 30px; line-height: 1; }
-  .name { font-size: 16px; font-weight: 600; }
-  .desc { font-size: 12px; color: #8ea0b8; margin-top: 3px; }
-  .foot { font-size: 12px; color: #66748a; margin-top: 18px; line-height: 1.8; }
+  .brand { display: flex; align-items: center; gap: 12px; }
+  .logo {
+    width: 46px; height: 46px; border-radius: 12px; object-fit: cover;
+    box-shadow: 0 6px 18px #00000066;
+  }
+  .brand h1 { font-size: 20px; margin: 0; letter-spacing: 0.5px; }
+  .brand .sm { font-size: 12px; color: #9db0cc; margin-top: 3px; }
+  .state {
+    margin-left: auto; font-size: 12px; padding: 5px 10px; border-radius: 20px;
+    background: #17321f; color: #55d488; border: 1px solid #2a5a38;
+  }
+  .state.off { background: #3a1f1f; color: #ff9b9b; border-color: #5f2b2b; }
+
+  .search { position: relative; margin: 16px 0 6px; }
+  .search input {
+    width: 100%; font-size: 15px; padding: 11px 14px 11px 38px;
+    border-radius: 12px; border: 1px solid #24314a; background: #151d2c;
+    color: #e9eef7; outline: none;
+  }
+  .search input:focus { border-color: #2b7cff; }
+  .search .ic { position: absolute; left: 13px; top: 10px; font-size: 15px; color: #7d90ab; }
+
+  .sechead {
+    display: flex; align-items: baseline; gap: 8px;
+    margin: 20px 0 10px; font-size: 13px; color: #8ea0b8;
+  }
+  .sechead::after { content: ""; flex: 1; height: 1px; background: #1e2939; }
+
+  .card {
+    display: flex; align-items: center; gap: 14px;
+    background: linear-gradient(180deg, #1a2333, #161e2b);
+    border: 1px solid #202c40;
+    border-radius: 16px; padding: 15px 16px; margin-bottom: 10px;
+    text-decoration: none; color: #e9eef7;
+    transition: transform 0.12s, border-color 0.12s, background 0.12s;
+  }
+  .card:hover { border-color: #2f4f86; background: #1b2639; }
+  .card:active { transform: scale(0.985); }
+  .ico {
+    width: 46px; height: 46px; border-radius: 12px; display: flex;
+    align-items: center; justify-content: center; font-size: 24px; flex: none;
+  }
+  .ico.a { background: #2b7cff22; }
+  .ico.b { background: #f2b65722; }
+  .ico.c { background: #16c47f22; }
+  .ico.d { background: #a86bff22; }
+  .meta { flex: 1; min-width: 0; }
+  .name { font-size: 16px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .desc { font-size: 12px; color: #93a5bd; margin-top: 5px; }
+  .tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .tag {
+    font-size: 11px; padding: 3px 8px; border-radius: 6px;
+    background: #1f2b3f; color: #8fa6c6;
+  }
+  .tag.hot { background: #2b7cff1f; color: #7fb0ff; }
+  .tag.off { background: #16c47f1f; color: #67d6a3; }
+  .tag.cloud { background: #f2b6571f; color: #f3c477; }
+  .arrow { color: #4d5f79; font-size: 18px; }
+
+  .empty { font-size: 14px; color: #7d90ab; padding: 18px 4px; }
+
+  .foot {
+    margin-top: 24px; font-size: 12px; color: #66748a; line-height: 1.9;
+    border-top: 1px solid #1c2635; padding-top: 16px;
+  }
+  .foot b { color: #9db0cc; font-weight: 600; }
+  .ghostbtn {
+    display: inline-block; margin-top: 8px; font-size: 12px; color: #8fa6c6;
+    background: #182131; border: 1px solid #24314a; padding: 7px 12px;
+    border-radius: 8px; cursor: pointer;
+  }
+  .ghostbtn:hover { border-color: #2b7cff; color: #cfe0ff; }
+
+  @media (max-width: 480px) {
+    body { padding: 0 12px 32px; }
+    .hero { margin: 0 -12px 16px; padding: 22px 16px 18px; }
+    .brand h1 { font-size: 18px; }
+  }
 </style>
 </head>
 <body>
 
-  <h1>杜裕杰的软件柜</h1>
-  <p class="tip">在哪都能打开，不用连同一个 Wi-Fi。记账本要登录，账目存在云端，几台设备看到的是同一份。</p>
+<header class="hero">
+  <div class="brand">
+    <img class="logo" src="icon-192.png" alt="软件柜">
+    <div>
+      <h1>杜裕杰的软件柜</h1>
+      <div class="sm">4 个应用 · 断网也能打开</div>
+    </div>
+    <div class="state" id="state">在线</div>
+  </div>
+  <div class="search">
+    <span class="ic">🔍</span>
+    <input id="q" placeholder="搜一下：题库 / 记账 / 地鼠 / 反射弧" autocomplete="off">
+  </div>
+</header>
 
-  <a class="card" href="jizhangben.html">
-    <span class="icon">💰</span>
-    <span>
-      <span class="name">记账本</span>
-      <span class="desc">邮箱登录 · 云端同步 · 可导出备份</span>
-    </span>
-  </a>
+<div id="list"></div>
 
-  <a class="card" href="tiku.html">
-    <span class="icon">🎫</span>
-    <span>
-      <span class="name">初级消控题库</span>
-      <span class="desc">120 题 · 分模块练 · 错题本</span>
-    </span>
-  </a>
+<p class="foot">
+  <b>变成手机 App：</b>浏览器菜单 →「添加到主屏幕」，就有独立图标，打开没有地址栏。<br>
+  <b>断网怎么办：</b>本机已经缓存好了，飞行模式下也能打开题库和游戏；记账本要联网才能同步云端。<br>
+  <span class="ghostbtn" id="upd">检查更新</span>
+</p>
 
-  <a class="card" href="whack.html">
-    <span class="icon">🐭</span>
-    <span>
-      <span class="name">打地鼠</span>
-      <span class="desc">30 秒，看你能敲几个</span>
-    </span>
-  </a>
+<script>
+  const APPS = [
+    { id: "tiku", name: "初级消控题库", icon: "🎫", cls: "a", href: "tiku.html",
+      desc: "消防设施操作员五级 · 419 道题 · 答对自动跳题", sec: "学习备考",
+      tags: [["hot", "419 题"], ["off", "离线可用"], ["", "错题本"]] },
+    { id: "jizhangben", name: "记账本", icon: "💰", cls: "b", href: "jizhangben.html",
+      desc: "邮箱登录 · 账目存云端 · 多设备同一份", sec: "效率工具",
+      tags: [["cloud", "需联网"], ["", "云端同步"], ["", "可导出"]] },
+    { id: "whack", name: "打地鼠", icon: "🐭", cls: "c", href: "whack.html",
+      desc: "30 秒 · 越打越快 · 连击加分", sec: "小游戏",
+      tags: [["off", "离线可用"], ["", "最高分"] ] },
+    { id: "reflex", name: "测反射弧", icon: "⚡", cls: "d", href: "reflex.html",
+      desc: "8 / 12 / 20 轮 · 反应毫秒 · 成绩曲线", sec: "小游戏",
+      tags: [["off", "离线可用"], ["", "历史最佳"] ] }
+  ];
 
-  <a class="card" href="reflex.html">
-    <span class="icon">⚡</span>
-    <span>
-      <span class="name">测反射弧</span>
-      <span class="desc">8 轮，测你反应多少毫秒</span>
-    </span>
-  </a>
+  const SECTIONS = ["学习备考", "效率工具", "小游戏"];
 
-  <p class="foot">
-    想变成手机 App：点浏览器菜单 →「添加到主屏幕」<br>
-    iPhone 用 Safari，安卓用 Chrome / Edge。
-  </p>
+  function tagHtml(t) {
+    return '<span class="tag ' + t[0] + '">' + t[1] + "</span>";
+  }
+
+  function cardHtml(a) {
+    return '<a class="card" href="' + a.href + '" data-id="' + a.id + '">' +
+      '<span class="ico ' + a.cls + '">' + a.icon + "</span>" +
+      '<span class="meta"><span class="name">' + a.name + "</span>" +
+      '<span class="desc">' + a.desc + "</span>" +
+      '<span class="tags">' + a.tags.map(tagHtml).join("") + "</span></span>" +
+      '<span class="arrow">›</span></a>';
+  }
+
+  function render() {
+    const kw = (document.getElementById("q").value || "").trim().toLowerCase();
+    const hit = APPS.filter(function (a) {
+      if (!kw) { return true; }
+      return (a.name + a.desc + a.sec).toLowerCase().indexOf(kw) >= 0;
+    });
+
+    let html = "";
+    if (!kw) {
+      const last = localStorage.getItem("lastOpen");
+      if (last) {
+        const a = APPS.filter(function (x) { return x.id === last; })[0];
+        if (a) { html += '<div class="sechead">最近打开</div>' + cardHtml(a); }
+      }
+      SECTIONS.forEach(function (s) {
+        const group = hit.filter(function (a) { return a.sec === s; });
+        if (group.length === 0) { return; }
+        html += '<div class="sechead">' + s + "</div>" + group.map(cardHtml).join("");
+      });
+    } else {
+      html = hit.length ? '<div class="sechead">搜索结果（' + hit.length + '）</div>' + hit.map(cardHtml).join("")
+        : '<p class="empty">没找到，换个词试试～</p>';
+    }
+    document.getElementById("list").innerHTML = html;
+
+    document.querySelectorAll("#list .card").forEach(function (el) {
+      el.addEventListener("click", function () {
+        localStorage.setItem("lastOpen", el.getAttribute("data-id"));
+      });
+    });
+  }
+
+  function setState() {
+    const el = document.getElementById("state");
+    const on = navigator.onLine;
+    el.textContent = on ? "在线" : "离线模式";
+    el.className = "state" + (on ? "" : " off");
+  }
+
+  document.getElementById("q").addEventListener("input", render);
+  window.addEventListener("online", setState);
+  window.addEventListener("offline", setState);
+
+  document.getElementById("upd").addEventListener("click", function () {
+    if (!("serviceWorker" in navigator)) { alert("这个浏览器不支持离线缓存，用 Edge 或 Chrome 打开。"); return; }
+    navigator.serviceWorker.getRegistration().then(function (reg) {
+      if (!reg) { location.reload(); return; }
+      reg.update().then(function () { alert("已检查更新，关闭页面重新打开就是最新版。"); });
+    });
+  });
+
+  setState();
+  render();
+
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("sw.js").catch(function () {});
+  }
+</script>
 
 </body>
 </html>

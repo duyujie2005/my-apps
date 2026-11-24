@@ -84,6 +84,16 @@
 
   .toggle { font-size: 13px; color: #6b7481; display: flex; align-items: center; gap: 6px; cursor: pointer; }
 
+  .prog { height: 6px; background: #e4e9f0; border-radius: 4px; overflow: hidden; margin-bottom: 12px; }
+  .progbar { height: 100%; width: 0; background: linear-gradient(90deg, #2b7cff, #14d07a); transition: width 0.25s; }
+  .back {
+    position: fixed; right: 14px; bottom: 14px; z-index: 9;
+    font-size: 13px; color: #fff; text-decoration: none;
+    background: #2b7cff; padding: 9px 14px; border-radius: 20px;
+    box-shadow: 0 6px 18px #2b7cff55;
+  }
+  .pos { font-size: 12px; color: #8a929e; margin-top: 8px; }
+
   @media (max-width: 520px) {
     body { padding: 12px; }
     .qtext { font-size: 16px; }
@@ -105,10 +115,13 @@
   <button id="btnRandom" onclick="setMode('random')">随机练</button>
   <button onclick="practiceWrong()">只练错题</button>
   <button onclick="showWrongBook()">错题本</button>
+  <button onclick="exportWrong()">导出错题</button>
   <button onclick="resetAll()">清空记录</button>
 </div>
 
 <label class="toggle"><input type="checkbox" id="autoChk" checked onchange="toggleAuto(this.checked)"> 答对后自动下一题（1.2 秒）</label>
+
+<div class="prog"><div class="progbar" id="progbar"></div></div>
 
 <div class="card" id="card"></div>
 
@@ -825,7 +838,50 @@ function updateStat() {
   document.getElementById("stat").innerHTML =
     "本轮已答 " + doneCount + " 题，答对 " + rightCount + " 题，正确率 " + rate + "%　｜　错题本：" +
     wrongSet.size + " 题　｜　题库共 " + BANK.length + " 题";
+  const bar = document.getElementById("progbar");
+  if (bar) {
+    const pct = (view === "quiz" && list.length) ? Math.min(idx, list.length) / list.length * 100 : 0;
+    bar.style.width = pct.toFixed(1) + "%";
+  }
 }
+
+// 导出错题本为 txt 文件，方便打印或发给别人
+function exportWrong() {
+  const items = BANK.filter(function (q) { return wrongSet.has(q.q); });
+  if (items.length === 0) { alert("错题本是空的，先练一轮吧。"); return; }
+  let txt = "初级消控题库 · 错题本（共 " + items.length + " 题）\n\n";
+  items.forEach(function (q, i) {
+    txt += (i + 1) + ". [" + (MODULE_NAME[q.m] || "综合") + " / " + typeName(q.t) + "] " + q.q + "\n";
+    if (q.t !== "judge") {
+      q.o.forEach(function (o, k) { txt += "    " + "ABCD"[k] + ". " + o + "\n"; });
+    }
+    txt += "    答案：" + rightAnswerText(q) + "\n    解析：" + (q.e || "") + "\n\n";
+  });
+  const blob = new Blob([txt], { type: "text/plain;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "错题本.txt";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
+}
+
+// 键盘操作：1~4 选答案，回车下一题
+document.addEventListener("keydown", function (e) {
+  if (view !== "quiz" || !list.length || idx >= list.length) { return; }
+  const q = list[idx];
+  if (e.key === "Enter") {
+    if (q.t === "multi" && !answered) { submitMulti(); }
+    else if (answered) { nextQ(); }
+    return;
+  }
+  if (/^[1-9]$/.test(e.key)) {
+    const n = Number(e.key) - 1;
+    const cnt = q.t === "judge" ? 2 : q.o.length;
+    if (n < cnt) { e.preventDefault(); pick(n); }
+  }
+});
 
 function escapeHtml(s) {
   return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -836,6 +892,12 @@ setSubtitle();
 buildChips();
 setMode("order");
 
+</script>
+
+<a class="back" href="index.html">← 软件柜</a>
+
+<script>
+  if ("serviceWorker" in navigator) { navigator.serviceWorker.register("sw.js").catch(function () {}); }
 </script>
 
 </body>

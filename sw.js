@@ -1,0 +1,70 @@
+/* 杜裕杰的软件柜 · 离线缓存（Service Worker）
+   作用：第一次打开把页面存到手机/电脑本地，以后断网也能打开。 */
+const CACHE = "shelf-v3";
+
+const FILES = [
+  "./",
+  "index.html",
+  "jizhangben.html",
+  "tiku.html",
+  "whack.html",
+  "reflex.html",
+  "manifest.json",
+  "icon-192.png",
+  "icon-512.png",
+  "apple-touch-icon.png",
+  "supabase.js"
+];
+
+// 安装：把清单里的文件一次性存进本地缓存
+self.addEventListener("install", function (event) {
+  event.waitUntil(
+    caches.open(CACHE).then(function (cache) {
+      return cache.addAll(FILES);
+    }).then(function () { return self.skipWaiting(); })
+  );
+});
+
+// 激活：清掉旧版本的缓存
+self.addEventListener("activate", function (event) {
+  event.waitUntil(
+    caches.keys().then(function (keys) {
+      return Promise.all(keys.filter(function (k) { return k !== CACHE; })
+        .map(function (k) { return caches.delete(k); }));
+    }).then(function () { return self.clients.claim(); })
+  );
+});
+
+// 取文件：页面优先走网络（保证是最新版），断网就用本地缓存
+self.addEventListener("fetch", function (event) {
+  const req = event.request;
+  if (req.method !== "GET") { return; }
+  const url = new URL(req.url);
+  if (url.origin !== self.location.origin) { return; }   // 外站资源不接管
+
+  if (req.mode === "navigate") {
+    event.respondWith(
+      fetch(req).then(function (res) {
+        const copy = res.clone();
+        caches.open(CACHE).then(function (c) { c.put(req, copy); });
+        return res;
+      }).catch(function () {
+        return caches.match(req).then(function (r) { return r || caches.match("index.html"); });
+      })
+    );
+    return;
+  }
+
+  event.respondWith(
+    caches.match(req).then(function (hit) {
+      if (hit) { return hit; }
+      return fetch(req).then(function (res) {
+        if (res && res.ok) {
+          const copy = res.clone();
+          caches.open(CACHE).then(function (c) { c.put(req, copy); });
+        }
+        return res;
+      });
+    })
+  );
+});
