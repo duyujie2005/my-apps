@@ -210,8 +210,7 @@
     for (const h of board.children) { h.classList.remove("mole"); h.textContent = ""; }
     document.getElementById("timebar").style.width = "0%";
     document.getElementById("left").textContent = "0";
-    document.getElementById("btnStart").style.display = "inline-block";
-    document.getElementById("btnStart").textContent = "再玩一局";
+    document.getElementById("btnStart").style.display = "none";   // 结算卡片里已有“再来一局”，底下按钮隐藏，避免重复
 
     const oldBest = best();
     if (score > oldBest) { localStorage.setItem("whackBest", String(score)); }
