@@ -137,6 +137,19 @@
 <script>
   const HOLES = 9;
   const TOTAL_SEC = 15;
+
+  // PK 对局：从好友页带 ?duel=<id>&role=c|o 进来，打完把成绩存下来再跳回好友页
+  function duelInfo() {
+    try {
+      const q = new URLSearchParams(location.search);
+      const id = parseInt(q.get("duel"), 10);
+      const role = q.get("role");
+      if (!id || (role !== "c" && role !== "o")) { return null; }
+      return { id: id, role: role };
+    } catch (e) { return null; }
+  }
+  const DUEL = duelInfo();
+
   const board = document.getElementById("board");
 
   let score = 0, streak = 0, maxStreak = 0, left = TOTAL_SEC;
@@ -330,6 +343,13 @@
     document.getElementById("result").scrollIntoView({ behavior: "smooth", block: "center" });
     renderBoard(ts);
     document.getElementById("boardTip").textContent = rank > 0 ? "这局排第 " + rank : "本机前 5 名";
+    if (DUEL) {
+      try {
+        localStorage.setItem("duelResult", JSON.stringify({ id: DUEL.id, role: DUEL.role, game: "whack", score: score, valid: null }));
+      } catch (e) {}
+      document.getElementById("boardTip").textContent = "PK 成绩已记下，马上回好友页…";
+      setTimeout(function () { location.href = "friends.html?duel=" + DUEL.id + "&role=" + DUEL.role; }, 1500);
+    }
     hud();
   }
 

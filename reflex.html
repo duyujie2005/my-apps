@@ -122,6 +122,18 @@
 <script>
   const MIN_WAIT = 1200, MAX_WAIT = 4000;
   const ROUNDS = 5;
+
+  // PK 对局：从好友页带 ?duel=<id>&role=c|o 进来，测完把平均存下来再跳回好友页
+  function duelInfo() {
+    try {
+      const q = new URLSearchParams(location.search);
+      const id = parseInt(q.get("duel"), 10);
+      const role = q.get("role");
+      if (!id || (role !== "c" && role !== "o")) { return null; }
+      return { id: id, role: role };
+    } catch (e) { return null; }
+  }
+  const DUEL = duelInfo();
   const LIMIT_MS = 500;
 
   let state = "idle";       // idle / waiting / go / cooldown / done
@@ -300,6 +312,16 @@
 
     renderBoard(ts);
     showBest();
+
+    if (DUEL) {
+      try {
+        localStorage.setItem("duelResult", JSON.stringify({
+          id: DUEL.id, role: DUEL.role, game: "reflex",
+          score: valid.length ? avg : null, valid: valid.length
+        }));
+      } catch (e) {}
+      setTimeout(function () { location.href = "friends.html?duel=" + DUEL.id + "&role=" + DUEL.role; }, 1600);
+    }
   }
 
   reset();

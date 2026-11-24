@@ -1,0 +1,552 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>好友 · 聊天 · PK</title>
+<meta name="theme-color" content="#0b1220">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<style>
+  :root {
+    --bg: #0b1220; --card: #131c2b; --card2: #0f1620; --line: #22303f;
+    --text: #e8eef7; --dim: #93a4bb; --blue: #2b7cff; --green: #14d07a; --red: #d9544f;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; background: radial-gradient(1200px 600px at 50% -10%, #16233a, var(--bg));
+    color: var(--text); font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+    padding: 16px 14px 40px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .back, .chip {
+    display: inline-block; padding: 6px 12px; border-radius: 999px; font-size: 12px;
+    background: #17202f; color: #cddae8; text-decoration: none; border: 1px solid var(--line);
+  }
+  h1 { font-size: 26px; margin: 14px 0 6px; }
+  .sub { color: var(--dim); font-size: 13px; margin: 0 0 16px; line-height: 1.6; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+  .card .t { font-size: 13px; color: var(--dim); margin-bottom: 10px; }
+  .rowline { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
+  .rowline .label { font-size: 12px; color: var(--dim); width: 66px; }
+  .code { font-size: 24px; font-weight: 800; letter-spacing: 2px; color: #ffd76a; }
+  .addrow { display: flex; gap: 8px; }
+  input {
+    flex: 1; min-width: 0; background: var(--card2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 10px; padding: 10px 12px; font-size: 14px; outline: none;
+  }
+  input:focus { border-color: var(--blue); }
+  button {
+    background: #1e2b3d; color: var(--text); border: 1px solid var(--line); border-radius: 10px;
+    padding: 10px 14px; font-size: 13px; cursor: pointer; white-space: nowrap;
+  }
+  button.primary { background: var(--blue); border-color: var(--blue); font-weight: 600; }
+  button.ghost { background: transparent; }
+  .fr { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid #1a2433; }
+  .fr:last-child { border-bottom: 0; }
+  .ava {
+    width: 38px; height: 38px; border-radius: 50%; background: linear-gradient(135deg, #2b7cff, #14d07a);
+    display: flex; align-items: center; justify-content: center; font-weight: 700; color: #0b1220; flex: none;
+  }
+  .fr .info { flex: 1; min-width: 0; }
+  .fr .nm { font-size: 14px; font-weight: 600; }
+  .fr .ms { font-size: 12px; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .dot { background: var(--red); color: #fff; font-size: 11px; border-radius: 999px; padding: 2px 7px; }
+  .empty { color: var(--dim); font-size: 13px; padding: 8px 0; }
+  .findres { margin-top: 10px; }
+  /* 聊天面板 */
+  .sheet {
+    position: fixed; inset: 0; background: #0b1220; display: none; flex-direction: column;
+    z-index: 50; padding: 12px 12px 10px;
+  }
+  .sheet.on { display: flex; }
+  .sheetTop { display: flex; align-items: center; gap: 10px; padding: 4px 2px 10px; border-bottom: 1px solid var(--line); }
+  .sheetTop .who { flex: 1; }
+  .sheetTop .who b { font-size: 15px; }
+  .sheetTop .who small { display: block; color: var(--dim); font-size: 11px; }
+  .pkbar { display: flex; gap: 8px; padding: 10px 0; }
+  .pkbar button { flex: 1; font-size: 12px; }
+  .msgs { flex: 1; overflow-y: auto; padding: 6px 2px 10px; }
+  .b { max-width: 78%; margin: 6px 0; padding: 9px 12px; border-radius: 12px; font-size: 13px; line-height: 1.55; word-break: break-word; }
+  .b.me { margin-left: auto; background: #23406b; border: 1px solid #2d5488; }
+  .b.other { background: var(--card); border: 1px solid var(--line); }
+  .b.sys { max-width: 100%; margin: 10px auto; background: transparent; border: 1px dashed #2d3d52; color: var(--dim); text-align: center; font-size: 12px; }
+  .b.card-duel { max-width: 100%; background: #182537; border: 1px solid #2c4a33; }
+  .b.card-duel .ln { font-size: 12px; color: var(--dim); margin-top: 4px; }
+  .say { display: flex; gap: 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+  .toast {
+    position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+    background: #1b2a3d; border: 1px solid #2c4159; color: #dbe7f4;
+    padding: 10px 16px; border-radius: 999px; font-size: 13px; opacity: 0; pointer-events: none;
+    transition: opacity .25s; z-index: 60; max-width: 90vw; text-align: center;
+  }
+  .toast.on { opacity: 1; }
+  .duelbtn { display: block; width: 100%; margin-top: 6px; text-align: left; background: #1a2b1f; border-color: #2c4a33; }
+</style>
+</head>
+<body data-guard="1">
+<div class="wrap">
+  <div class="top">
+    <a class="back" href="index.html">← 软件柜</a>
+    <span class="chip" id="who">未登录</span>
+  </div>
+  <h1>好友 · 聊天 · PK</h1>
+  <p class="sub">先把好友号发给同学，他输入就能加你。加完可以聊天，也可以互相 PK 打地鼠和测反射弧。</p>
+
+  <div class="card">
+    <div class="t">我</div>
+    <div class="rowline">
+      <span class="label">好友号</span>
+      <span class="code" id="myCode">······</span>
+      <button id="btnCopy" class="ghost">复制</button>
+    </div>
+    <div class="rowline">
+      <span class="label">昵称</span>
+      <input id="nick" maxlength="12" placeholder="别人看到的名字">
+      <button id="btnNick" class="ghost">保存</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="t">加好友</div>
+    <div class="addrow">
+      <input id="q" placeholder="对方好友号（6 位）或邮箱">
+      <button id="btnFind" class="primary">查找</button>
+    </div>
+    <div class="findres" id="findBox"></div>
+  </div>
+
+  <div class="card" id="duelBox" style="display:none">
+    <div class="t">对战邀请</div>
+    <div id="duelList"></div>
+  </div>
+
+  <div class="card">
+    <div class="t">我的好友 <span id="frCount" style="color:#7d90ab"></span></div>
+    <div id="frList"></div>
+  </div>
+</div>
+
+<div class="sheet" id="sheet">
+  <div class="sheetTop">
+    <div class="who"><b id="chatName">好友</b><small id="chatCode"></small></div>
+    <button id="btnClose" class="ghost">关闭</button>
+  </div>
+  <div class="pkbar">
+    <button data-game="whack">🐭 PK 打地鼠</button>
+    <button data-game="reflex">⚡ PK 反射弧</button>
+  </div>
+  <div class="msgs" id="msgs"></div>
+  <div class="say">
+    <input id="msg" maxlength="200" placeholder="说点什么…">
+    <button id="btnSend" class="primary">发送</button>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+
+<script src="supabase.js"></script>
+<script>
+  const SUPABASE_URL = "https://jrykjjhxfxdkntenilyd.supabase.co";
+  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpyeWtqamh4Znhka250ZW5pbHlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU0MjUyMTcsImV4cCI6MjExMTAwMTIxN30.eEW940nO8CqJz6HB_4fZvPbbr4S10O5yhBLdXrLAZAg";
+
+  const GAMES = { whack: "打地鼠", reflex: "反射弧" };
+  let sb = null, me = null, myProfile = null;
+  let friends = [], profiles = {}, msgs = [], duels = [];
+  let current = null;          // 正在聊的好友 {id, nick, code}
+  let pollId = 0, busy = false, lastSig = "";
+  let toastTimer = 0;
+
+  function toast(text) {
+    const el = document.getElementById("toast");
+    el.textContent = text;
+    el.classList.add("on");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () { el.classList.remove("on"); }, 2600);
+  }
+
+  async function sha256(text) {
+    const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
+    return Array.from(new Uint8Array(buf)).map(function (x) { return x.toString(16).padStart(2, "0"); }).join("");
+  }
+
+  function randCode() {
+    let s = "";
+    for (let i = 0; i < 6; i++) { s += Math.floor(Math.random() * 10); }
+    return s;
+  }
+
+  function nameOf(p, fallback) { return (p && p.nick) || fallback || "好友"; }
+
+  async function boot() {
+    sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+    const res = await sb.auth.getSession();
+    const session = res.data ? res.data.session : null;
+    if (!session) { location.replace("login.html?next=friends.html"); return; }
+    me = session.user;
+    document.getElementById("who").textContent = "👤 " + (me.email || "").split("@")[0];
+    if (window.AUTH) { AUTH.setUser(me.email); }
+    await ensureProfile();
+    await Promise.all([loadFriends(), loadMessages(), loadDuels()]);
+    await submitPendingDuel();
+    renderAll();
+    pollId = setInterval(refresh, 2500);
+  }
+
+  async function ensureProfile() {
+    const r = await sb.from("profiles").select("*").eq("id", me.id).maybeSingle();
+    if (r.data) { myProfile = r.data; }
+    else {
+      const hash = await sha256((me.email || "").toLowerCase());
+      const nick = (me.email || "").split("@")[0].slice(0, 12);
+      for (let i = 0; i < 5; i++) {
+        const ins = await sb.from("profiles").insert({ id: me.id, code: randCode(), nick: nick, email_hash: hash }).select().maybeSingle();
+        if (ins.data) { myProfile = ins.data; break; }
+      }
+      if (!myProfile) {
+        const again = await sb.from("profiles").select("*").eq("id", me.id).maybeSingle();
+        myProfile = again.data || { code: "------", nick: nick };
+      }
+    }
+    document.getElementById("myCode").textContent = myProfile.code;
+    document.getElementById("nick").value = myProfile.nick;
+  }
+
+  async function loadFriends() {
+    const r = await sb.from("friends").select("owner,friend").or("owner.eq." + me.id + ",friend.eq." + me.id);
+    if (r.error) { toast("读好友失败：" + r.error.message); return; }
+    const ids = (r.data || []).map(function (x) { return x.owner === me.id ? x.friend : x.owner; });
+    friends = ids.map(function (id) { return { id: id }; });
+    if (ids.length) {
+      const p = await sb.from("profiles").select("id,code,nick").in("id", ids);
+      profiles = {};
+      (p.data || []).forEach(function (x) { profiles[x.id] = x; });
+    }
+    if (current && ids.indexOf(current.id) < 0) { closeChat(); }
+  }
+
+  async function loadMessages() {
+    const r = await sb.from("messages")
+      .select("id,sender,receiver,body,created_at")
+      .or("sender.eq." + me.id + ",receiver.eq." + me.id)
+      .order("id", { ascending: false }).limit(300);
+    if (r.error) { return; }
+    msgs = (r.data || []).slice().reverse();
+  }
+
+  async function loadDuels() {
+    const r = await sb.from("duels")
+      .select("id,game,challenger,opponent,c_score,o_score,c_valid,o_valid,status,created_at")
+      .or("challenger.eq." + me.id + ",opponent.eq." + me.id)
+      .order("id", { ascending: false }).limit(100);
+    if (r.error) { return; }
+    duels = r.data || [];
+  }
+
+  async function refresh() {
+    if (busy || !sb) { return; }
+    busy = true;
+    try {
+      await Promise.all([loadMessages(), loadDuels()]);
+      const sig = dataSig();
+      if (sig !== lastSig) {
+        lastSig = sig;
+        renderList();
+        renderDuelBox();
+        if (current) { renderChat(); }
+      }
+    } catch (e) { /* 忽略单次失败 */ }
+    busy = false;
+  }
+
+  function dataSig() {
+    const m = msgs.length ? msgs[msgs.length - 1].id : 0;
+    return [msgs.length, m,
+      duels.map(function (d) { return d.id + ":" + d.status + ":" + d.c_score + ":" + d.o_score; }).join(","),
+      friends.length, Object.keys(profiles).length, current ? current.id : "-"].join("|");
+  }
+
+  function lastMsgOf(fid) {
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      const m = msgs[i];
+      if ((m.sender === me.id && m.receiver === fid) || (m.sender === fid && m.receiver === me.id)) { return m; }
+    }
+    return null;
+  }
+
+  function seenKey(fid) { return "frSeen:" + fid; }
+
+  function unreadOf(fid) {
+    const seen = Number(localStorage.getItem(seenKey(fid)) || 0);
+    return msgs.filter(function (m) { return m.sender === fid && m.id > seen; }).length;
+  }
+
+  function renderAll() {
+    renderList();
+    renderDuelBox();
+  }
+
+  function renderList() {
+    const box = document.getElementById("frList");
+    const cnt = document.getElementById("frCount");
+    cnt.textContent = friends.length ? "（" + friends.length + " 人）" : "";
+    if (!friends.length) {
+      box.innerHTML = '<div class="empty">还没有好友。把你的好友号发给同学，他输入就能加你；也可以输入他的好友号加他。</div>';
+      return;
+    }
+    box.innerHTML = friends.map(function (f) {
+      const p = profiles[f.id] || {};
+      const last = lastMsgOf(f.id);
+      const un = unreadOf(f.id);
+      const letter = (nameOf(p, "友")[0] || "友").toUpperCase();
+      return '<div class="fr" data-id="' + f.id + '">' +
+        '<div class="ava">' + letter + '</div>' +
+        '<div class="info"><div class="nm">' + nameOf(p, "好友") +
+          (un ? ' <span class="dot">' + un + '</span>' : "") + '</div>' +
+          '<div class="ms">' + (last ? last.body.replace(/</g, "&lt;") : "好友号 " + (p.code || "------")) + '</div></div>' +
+        '<button class="ghost" data-open="' + f.id + '">聊天</button></div>';
+    }).join("");
+    box.querySelectorAll("[data-open]").forEach(function (b) {
+      b.addEventListener("click", function () { openChat(b.getAttribute("data-open")); });
+    });
+  }
+
+  function myRole(d) { return d.challenger === me.id ? "c" : "o"; }
+
+  function duelLine(d) {
+    const role = myRole(d);
+    const my = role === "c" ? d.c_score : d.o_score;
+    const other = role === "c" ? d.o_score : d.c_score;
+    const played = role === "c" ? (d.c_score !== null) : (d.o_score !== null);
+    const otherPlayed = role === "c" ? (d.o_score !== null) : (d.c_score !== null);
+    let out = "";
+    if (!played) { out = "我还没打（点下面的按钮去打）"; }
+    else if (!otherPlayed) { out = "我打了 " + fmtScore(d.game, my) + "，等对手"; }
+    else {
+      const cmp = d.game === "whack" ? (Number(my) - Number(other)) : (Number(other) - Number(my));
+      out = "我 " + fmtScore(d.game, my) + " ｜ 对手 " + fmtScore(d.game, other) + " → " +
+        (cmp > 0 ? "我赢 🏆" : (cmp < 0 ? "对手赢" : "平局"));
+    }
+    return out;
+  }
+
+  function fmtScore(game, v) {
+    if (v === null || v === undefined) { return "无效"; }
+    return game === "whack" ? v + " 只" : v + " ms";
+  }
+
+  function renderDuelBox() {
+    const box = document.getElementById("duelBox");
+    const list = document.getElementById("duelList");
+    const now = Date.now();
+    const pending = duels.filter(function (d) {
+      return d.opponent === me.id && d.o_score === null && d.status !== "done" &&
+        (now - new Date(d.created_at).getTime()) < 30 * 60 * 1000;
+    });
+    if (!pending.length) { box.style.display = "none"; return; }
+    box.style.display = "block";
+    list.innerHTML = pending.map(function (d) {
+      const p = profiles[d.challenger] || {};
+      return '<div class="fr" style="border:0;padding:6px 0">' +
+        '<div class="info"><div class="nm">' + nameOf(p, "好友") + ' 找你 PK ' + GAMES[d.game] + '</div>' +
+        '<div class="ms">他打了 ' + fmtScore(d.game, d.c_score) + '，该你了</div></div>' +
+        '<button class="primary" data-accept="' + d.id + '">去应战</button></div>';
+    }).join("");
+    list.querySelectorAll("[data-accept]").forEach(function (b) {
+      b.addEventListener("click", function () { acceptDuel(b.getAttribute("data-accept")); });
+    });
+  }
+
+  async function acceptDuel(id) {
+    const d = duels.filter(function (x) { return String(x.id) === String(id); })[0];
+    if (!d) { return; }
+    localStorage.setItem("duelAccepted:" + d.id, "1");
+    goGame(d.id, "o", d.game);
+  }
+
+  function goGame(duelId, role, game) {
+    const url = (game === "whack" ? "whack.html" : "reflex.html") + "?duel=" + duelId + "&role=" + role;
+    location.href = url;
+  }
+
+  function openChat(fid) {
+    const p = profiles[fid] || {};
+    current = { id: fid, nick: nameOf(p, "好友"), code: p.code || "------" };
+    document.getElementById("chatName").textContent = current.nick;
+    document.getElementById("chatCode").textContent = "好友号 " + current.code;
+    document.getElementById("sheet").classList.add("on");
+    document.getElementById("sheet").style.zIndex = 50;
+    renderChat();
+    // 标记已读
+    const last = lastMsgOf(fid);
+    if (last) { localStorage.setItem(seenKey(fid), String(last.id)); }
+    renderList();
+  }
+
+  function closeChat() {
+    current = null;
+    document.getElementById("sheet").classList.remove("on");
+  }
+
+  function pairMsgs(fid) {
+    return msgs.filter(function (m) {
+      return (m.sender === me.id && m.receiver === fid) || (m.sender === fid && m.receiver === me.id);
+    });
+  }
+
+  function pairDuels(fid) {
+    return duels.filter(function (d) {
+      return (d.challenger === me.id && d.opponent === fid) || (d.challenger === fid && d.opponent === me.id);
+    });
+  }
+
+  function renderChat() {
+    if (!current) { return; }
+    const box = document.getElementById("msgs");
+    const items = [];
+    pairMsgs(current.id).forEach(function (m) {
+      items.push({ ts: new Date(m.created_at).getTime(), kind: m.sender === me.id ? "me" : "other", text: m.body });
+    });
+    pairDuels(current.id).forEach(function (d) {
+      items.push({ ts: new Date(d.created_at).getTime(), kind: "duel", duel: d });
+    });
+    items.sort(function (a, b) { return a.ts - b.ts; });
+
+    if (!items.length) {
+      box.innerHTML = '<div class="b sys">还没有消息，说句话打招呼吧～</div>';
+      return;
+    }
+    box.innerHTML = items.map(function (it) {
+      if (it.kind === "duel") {
+        const d = it.duel;
+        const role = myRole(d);
+        const played = role === "c" ? d.c_score !== null : d.o_score !== null;
+        const meId = d.challenger === me.id ? "我发起" : "对手发起";
+        let btn = "";
+        if (role === "o" && !played && d.status !== "done") {
+          btn = '<button class="duelbtn" data-play="' + d.id + '" data-game="' + d.game + '">去打一局 →</button>';
+        }
+        return '<div class="b card-duel">🏆 PK ' + GAMES[d.game] + ' · ' + meId +
+          '<div class="ln">' + duelLine(d) + '</div>' + btn + '</div>';
+      }
+      return '<div class="b ' + it.kind + '">' + String(it.text).replace(/</g, "&lt;") + '</div>';
+    }).join("");
+    box.querySelectorAll("[data-play]").forEach(function (b) {
+      b.addEventListener("click", function () {
+        goGame(b.getAttribute("data-play"), "o", b.getAttribute("data-game"));
+      });
+    });
+    box.scrollTop = box.scrollHeight;
+  }
+
+  async function send() {
+    const input = document.getElementById("msg");
+    const body = (input.value || "").trim();
+    if (!body || !current) { return; }
+    input.value = "";
+    const r = await sb.from("messages").insert({ sender: me.id, receiver: current.id, body: body });
+    if (r.error) { toast("发不出去：" + r.error.message); return; }
+    await loadMessages();
+    renderChat();
+    renderList();
+  }
+
+  async function challenge(game) {
+    if (!current) { return; }
+    const r = await sb.from("duels").insert({
+      game: game, challenger: me.id, opponent: current.id, status: "wait"
+    }).select("id").maybeSingle();
+    if (r.error) { toast("发起失败：" + r.error.message); return; }
+    const id = r.data && r.data.id;
+    if (!id) { toast("发起失败，请再试一次"); return; }
+    goGame(id, "c", game);
+  }
+
+  async function findPerson() {
+    const q = (document.getElementById("q").value || "").trim();
+    const box = document.getElementById("findBox");
+    if (!q) { box.innerHTML = '<div class="empty">先输入好友号或邮箱</div>'; return; }
+    box.innerHTML = '<div class="empty">查找中…</div>';
+    let row = null;
+    if (/^\d{6}$/.test(q)) {
+      const r = await sb.from("profiles").select("id,code,nick").eq("code", q).maybeSingle();
+      row = r.data;
+    } else if (q.indexOf("@") > 0) {
+      const h = await sha256(q.toLowerCase());
+      const r = await sb.from("profiles").select("id,code,nick").eq("email_hash", h).maybeSingle();
+      row = r.data;
+    } else {
+      box.innerHTML = '<div class="empty">好友号是 6 位数字；也可以直接填对方邮箱。</div>';
+      return;
+    }
+    if (!row) { box.innerHTML = '<div class="empty">没找到这个人。确认好友号或邮箱没写错，而且他已经登录过一次这个软件柜。</div>'; return; }
+    if (row.id === me.id) { box.innerHTML = '<div class="empty">这是你自己呀～</div>'; return; }
+    if (friends.some(function (f) { return f.id === row.id; })) { box.innerHTML = '<div class="empty">他已经是你的好友了，直接点“聊天”。</div>'; return; }
+    box.innerHTML = '<div class="fr" style="border:0"><div class="ava">' + (row.nick[0] || "友") + '</div>' +
+      '<div class="info"><div class="nm">' + row.nick + '</div><div class="ms">好友号 ' + row.code + '</div></div>' +
+      '<button class="primary" id="btnAdd">加好友</button></div>';
+    document.getElementById("btnAdd").addEventListener("click", async function () {
+      const r = await sb.from("friends").insert({ owner: me.id, friend: row.id });
+      if (r.error) { toast("加好友失败：" + r.error.message); return; }
+      toast("已添加 " + row.nick + " 为好友");
+      await loadFriends();
+      renderList();
+      box.innerHTML = '<div class="empty">已加为好友，去聊天吧。</div>';
+    });
+  }
+
+  async function saveNick() {
+    const v = (document.getElementById("nick").value || "").trim();
+    if (!v) { toast("昵称不能空着"); return; }
+    const r = await sb.from("profiles").update({ nick: v }).eq("id", me.id);
+    if (r.error) { toast("保存失败：" + r.error.message); return; }
+    if (myProfile) { myProfile.nick = v; }
+    toast("昵称已保存");
+  }
+
+  async function submitPendingDuel() {
+    const qs = new URLSearchParams(location.search);
+    const id = parseInt(qs.get("duel"), 10);
+    const role = qs.get("role");
+    if (!id || (role !== "c" && role !== "o")) { return; }
+    let res = null;
+    try { res = JSON.parse(localStorage.getItem("duelResult") || "null"); } catch (e) { res = null; }
+    if (res && res.id === id && res.role === role) {
+      const r = await sb.from("duels").select("*").eq("id", id).maybeSingle();
+      if (r.data) {
+        const patch = role === "c"
+          ? { c_score: res.score, c_valid: res.valid }
+          : { o_score: res.score, o_valid: res.valid };
+        const otherDone = role === "c" ? r.data.o_score !== null : r.data.c_score !== null;
+        patch.status = otherDone ? "done" : (role === "c" ? "c_done" : "o_done");
+        const up = await sb.from("duels").update(patch).eq("id", id);
+        if (up.error) { toast("传成绩失败：" + up.error.message); }
+      }
+      localStorage.removeItem("duelResult");
+    }
+    history.replaceState(null, "", "friends.html");
+  }
+
+  document.getElementById("btnFind").addEventListener("click", findPerson);
+  document.getElementById("q").addEventListener("keydown", function (e) { if (e.key === "Enter") { findPerson(); } });
+  document.getElementById("btnNick").addEventListener("click", saveNick);
+  document.getElementById("btnCopy").addEventListener("click", function () {
+    const code = myProfile ? myProfile.code : "";
+    if (!code) { return; }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(code).then(function () { toast("好友号已复制：" + code); }, function () { toast("复制失败，手动记一下：" + code); });
+    } else { toast("我的好友号：" + code); }
+  });
+  document.getElementById("btnClose").addEventListener("click", closeChat);
+  document.getElementById("btnSend").addEventListener("click", send);
+  document.getElementById("msg").addEventListener("keydown", function (e) { if (e.key === "Enter") { send(); } });
+  document.querySelectorAll(".pkbar button").forEach(function (b) {
+    b.addEventListener("click", function () { challenge(b.getAttribute("data-game")); });
+  });
+
+  boot().catch(function (e) {
+    document.getElementById("frList").innerHTML = '<div class="empty">加载失败：' + e.message + '</div>';
+  });
+</script>
+</body>
+</html>

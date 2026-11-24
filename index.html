@@ -129,13 +129,13 @@
     <img class="logo" src="icon-192.png" alt="软件柜">
     <div>
       <h1>杜裕杰的软件柜</h1>
-      <div class="sm">6 个应用 · 断网也能打开</div>
+      <div class="sm">7 个应用 · 断网也能打开</div>
     </div>
     <div class="state" id="state">在线</div>
   </div>
   <div class="search">
     <span class="ic">🔍</span>
-    <input id="q" placeholder="搜一下：消控 / 会计 / 保安 / 记账 / 游戏" autocomplete="off">
+    <input id="q" placeholder="搜一下：消控 / 会计 / 保安 / 记账 / 好友 / 游戏" autocomplete="off">
   </div>
 </header>
 
@@ -160,6 +160,9 @@
     { id: "tiku", name: "初级消控题库", icon: "🎫", cls: "a", href: "tiku.html",
       desc: "消防设施操作员五级 · 419 题 · 做对不再重刷", sec: "学习备考",
       tags: [["hot", "419 题"], ["off", "离线可用"], ["", "错题本"]] },
+    { id: "friends", name: "好友 · 聊天 · PK", icon: "👥", cls: "a", href: "friends.html",
+      desc: "好友号加人 · 实时聊天 · 打地鼠/反射弧对战", sec: "好友社交",
+      tags: [["cloud", "需联网"], ["", "实时"], ["", "PK"]] },
     { id: "jizhangben", name: "记账本", icon: "💰", cls: "b", href: "jizhangben.html",
       desc: "邮箱登录 · 账目存云端 · 多设备同一份", sec: "效率工具",
       tags: [["cloud", "需联网"], ["", "云端同步"], ["", "可导出"]] },
@@ -171,7 +174,7 @@
       tags: [["off", "离线可用"], ["", "历史最佳"] ] }
   ];
 
-  const SECTIONS = ["学习备考", "效率工具", "小游戏"];
+  const SECTIONS = ["学习备考", "效率工具", "好友社交", "小游戏"];
 
   function tagHtml(t) {
     return '<span class="tag ' + t[0] + '">' + t[1] + "</span>";
