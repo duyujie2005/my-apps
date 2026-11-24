@@ -13,10 +13,11 @@
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
-    margin: 0; padding: 20px 16px 34px;
+    margin: 0; padding: 20px 16px 34px; min-height: 100vh;
     font-family: "Microsoft YaHei", -apple-system, "PingFang SC", sans-serif;
     background: radial-gradient(120% 100% at 50% 0%, #1d2b40 0%, #101521 60%);
-    color: #e9eef7; text-align: center; min-height: 100vh;
+    color: #e9eef7; text-align: center;
+    user-select: none;
   }
   .back {
     position: fixed; right: 14px; bottom: 14px; z-index: 5;
@@ -28,15 +29,12 @@
   .sub { font-size: 12px; color: #8ea0b8; margin: 0 0 14px; }
 
   .hud { display: flex; gap: 8px; justify-content: center; margin-bottom: 10px; flex-wrap: wrap; }
-  .box {
-    background: #1a2434; border: 1px solid #24314a; border-radius: 12px;
-    padding: 8px 14px; min-width: 76px;
-  }
+  .box { background: #1a2434; border: 1px solid #24314a; border-radius: 12px; padding: 8px 14px; min-width: 74px; }
   .box span { display: block; font-size: 11px; color: #8ea0b8; }
   .box b { font-size: 18px; }
 
   .timeline { height: 6px; background: #1a2434; border-radius: 4px; overflow: hidden; margin: 0 auto 16px; max-width: 340px; }
-  .timebar { height: 100%; width: 100%; background: linear-gradient(90deg, #16c47f, #2b7cff); transition: width 1s linear; }
+  .timebar { height: 100%; width: 100%; background: linear-gradient(90deg, #16c47f, #2b7cff); }
 
   #board {
     display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -46,13 +44,11 @@
     aspect-ratio: 1 / 1; border-radius: 14px; background: #1a2434;
     border: 1px solid #233048; font-size: 34px;
     display: flex; align-items: center; justify-content: center;
-    cursor: pointer; user-select: none; transition: transform 0.08s, background 0.12s;
+    cursor: pointer; transition: transform 0.06s, background 0.08s;
   }
   .hole.mole { background: linear-gradient(180deg, #ffd166, #f5b42a); border-color: #ffd166; transform: translateY(-3px); }
-  .hole.hit { animation: pop 0.2s ease; }
-  .hole.miss { animation: shake 0.18s ease; background: #3a2230; }
-  @keyframes pop { 0% { transform: scale(1); } 45% { transform: scale(1.12); } 100% { transform: scale(1); } }
-  @keyframes shake { 0%,100% { transform: translateX(0); } 30% { transform: translateX(-4px); } 70% { transform: translateX(4px); } }
+  .hole.hit { animation: pop 0.16s ease; }
+  @keyframes pop { 0% { transform: scale(1); } 45% { transform: scale(1.14); } 100% { transform: scale(1); } }
 
   .start {
     font-size: 16px; padding: 12px 30px; border: none; border-radius: 12px;
@@ -73,7 +69,7 @@
 </head>
 <body>
 <h1>打地鼠</h1>
-<p class="sub">30 秒 · 越到后面出现越快 · 连击有加成 · 敲空扣分</p>
+<p class="sub">30 秒 · 老鼠一直在，打掉一只立刻换下一只</p>
 
 <div class="hud">
   <div class="box"><span>得分</span><b id="score">0</b></div>
@@ -88,19 +84,19 @@
 
 <div id="result">
   <div style="font-size:13px;color:#8ea0b8">这一局</div>
-  <div class="big" id="rScore">0 分</div>
+  <div class="big" id="rScore">0 只</div>
   <div class="stats">
     <div>打中<b id="rHit">0</b></div>
-    <div>漏掉<b id="rMiss">0</b></div>
-    <div>命中率<b id="rRate">0%</b></div>
+    <div>每秒<b id="rSpeed">0</b></div>
     <div>最长连击<b id="rStreak">0</b></div>
+    <div>考级档位<b id="rRank">--</b></div>
   </div>
   <div class="bestline" id="rBest"></div>
   <button class="start" style="margin-top:14px" onclick="startGame()">再来一局</button>
 </div>
 
 <button class="start" id="btnStart" onclick="startGame()">开始游戏</button>
-<p class="tip">用鼠标或手指点有老鼠的洞。连击 5 次以上每次多加分，敲空洞扣 1 分。</p>
+<p class="tip">开始后老鼠一出现就立刻打，打中马上换下一只，中间没有任何等待。30 秒内看你能打多少只。</p>
 
 <a class="back" href="index.html">← 软件柜</a>
 
@@ -109,16 +105,15 @@
   const TOTAL_SEC = 30;
   const board = document.getElementById("board");
 
-  let score = 0, hit = 0, miss = 0, streak = 0, maxStreak = 0;
-  let left = TOTAL_SEC, running = false, moleIndex = -1, startedAt = 0;
-  let spawnTimer = null, hideTimer = null, tickTimer = null;
+  let score = 0, streak = 0, maxStreak = 0, left = TOTAL_SEC;
+  let running = false, moleIdx = -1, startTs = 0, rafId = 0, lastSec = 30;
   let audioCtx = null;
 
   for (let i = 0; i < HOLES; i++) {
     const d = document.createElement("div");
     d.className = "hole";
     d.dataset.i = i;
-    d.onclick = function () { clickHole(i, d); };
+    d.onclick = function () { hitHole(i, d); };
     board.appendChild(d);
   }
 
@@ -129,7 +124,7 @@
       const g = audioCtx.createGain();
       o.type = type || "square";
       o.frequency.value = freq;
-      g.gain.value = 0.06;
+      g.gain.value = 0.05;
       o.connect(g); g.connect(audioCtx.destination);
       o.start(); o.stop(audioCtx.currentTime + dur);
     } catch (e) {}
@@ -140,113 +135,99 @@
   function hud() {
     document.getElementById("score").textContent = score;
     document.getElementById("streak").textContent = streak;
-    document.getElementById("left").textContent = left;
+    document.getElementById("left").textContent = Math.ceil(left);
     document.getElementById("best").textContent = best();
-    document.getElementById("timebar").style.width = (left / TOTAL_SEC * 100) + "%";
   }
 
-  function clearMole() {
+  // 立刻清场并放下一只：不等、不延时、不重复同一个洞
+  function nextMole() {
+    if (!running) { return; }
     for (const h of board.children) {
       h.classList.remove("mole");
       h.textContent = "";
     }
-    moleIndex = -1;
-  }
-
-  // 难度：时间越往后，出现间隔和停留时间都变短
-  function spawnGap() {
-    const played = TOTAL_SEC - left;
-    return Math.max(360, 950 - played * 20);
-  }
-  function stayMs() { return Math.max(430, 800 - (TOTAL_SEC - left) * 13); }
-
-  function looseMiss() {
-    miss = miss + 1;
-    streak = 0;
-    hud();
-  }
-
-  function spawn() {
-    clearMole();
-    moleIndex = Math.floor(Math.random() * HOLES);
-    const hole = board.children[moleIndex];
+    let i = Math.floor(Math.random() * HOLES);
+    if (HOLES > 1 && i === moleIdx) { i = (i + 1 + Math.floor(Math.random() * (HOLES - 1))) % HOLES; }
+    moleIdx = i;
+    const hole = board.children[i];
     hole.classList.add("mole");
     hole.textContent = "🐭";
-    hideTimer = setTimeout(function () {
-      if (!running) { return; }
-      if (hole.textContent === "🐭") {
-        looseMiss();
-        hole.classList.remove("mole");
-        hole.textContent = "";
-        moleIndex = -1;
-      }
-      spawnTimer = setTimeout(spawn, spawnGap());
-    }, stayMs());
   }
 
-  function clickHole(i, el) {
+  function hitHole(i, el) {
     if (!running) { return; }
-    if (i === moleIndex) {
-      hit = hit + 1;
-      streak = streak + 1;
-      if (streak > maxStreak) { maxStreak = streak; }
-      let add = 1;
-      if (streak >= 10) { add = 3; } else if (streak >= 5) { add = 2; }
-      score = score + add;
-      el.classList.add("hit");
-      beep(900, 0.06, "square");
-      setTimeout(function () { el.classList.remove("hit"); }, 200);
-      clearMole();
-      hud();
-    } else {
-      miss = miss + 1;
-      streak = 0;
-      score = Math.max(0, score - 1);
-      el.classList.add("miss");
-      beep(240, 0.1, "sawtooth");
-      setTimeout(function () { el.classList.remove("miss"); }, 180);
-      hud();
-    }
+    if (i !== moleIdx) { beep(200, 0.05, "sawtooth"); return; }   // 打偏了不给分，也不算错
+
+    score = score + 1;
+    streak = streak + 1;
+    if (streak > maxStreak) { maxStreak = streak; }
+    el.classList.add("hit");
+    beep(940, 0.05, "square");
+    setTimeout(function () { el.classList.remove("hit"); }, 150);
+
+    hud();
+    nextMole();       // 打中后立刻切换，零等待
   }
 
   function startGame() {
     if (running) { return; }
     running = true;
-    score = 0; hit = 0; miss = 0; streak = 0; maxStreak = 0; left = TOTAL_SEC;
+    score = 0; streak = 0; maxStreak = 0; left = TOTAL_SEC; lastSec = 30;
+    moleIdx = -1;
     document.getElementById("result").style.display = "none";
     document.getElementById("btnStart").style.display = "none";
+    document.getElementById("timebar").style.width = "100%";
     hud();
-    spawn();
-    tickTimer = setInterval(function () {
-      left = left - 1;
-      if (left <= 0) { endGame(); } else { hud(); }
-    }, 1000);
+    startTs = performance.now();
+    nextMole();
+    loop();
+  }
+
+  function loop() {
+    if (!running) { return; }
+    const elapsed = (performance.now() - startTs) / 1000;
+    left = Math.max(0, TOTAL_SEC - elapsed);
+    document.getElementById("timebar").style.width = (left / TOTAL_SEC * 100) + "%";
+    const sec = Math.ceil(left);
+    if (sec !== lastSec) { lastSec = sec; document.getElementById("left").textContent = sec; }
+    if (left <= 0) { endGame(); return; }
+    rafId = requestAnimationFrame(loop);
+  }
+
+  function rankOf(perSec) {
+    if (perSec >= 5) { return "电竞手速"; }
+    if (perSec >= 3.5) { return "职业级"; }
+    if (perSec >= 2.5) { return "很快"; }
+    if (perSec >= 1.5) { return "一般"; }
+    return "慢慢来";
   }
 
   function endGame() {
     running = false;
-    clearTimeout(spawnTimer); clearTimeout(hideTimer); clearInterval(tickTimer);
-    clearMole();
+    cancelAnimationFrame(rafId);
     left = 0;
-    hud();
+    moleIdx = -1;
+    for (const h of board.children) { h.classList.remove("mole"); h.textContent = ""; }
+    document.getElementById("timebar").style.width = "0%";
+    document.getElementById("left").textContent = "0";
     document.getElementById("btnStart").style.display = "inline-block";
     document.getElementById("btnStart").textContent = "再玩一局";
 
     const oldBest = best();
     if (score > oldBest) { localStorage.setItem("whackBest", String(score)); }
+    const perSec = score / TOTAL_SEC;
 
-    const shots = hit + miss;
-    const rate = shots === 0 ? 0 : Math.round(hit / shots * 100);
-    document.getElementById("rScore").textContent = score + " 分";
-    document.getElementById("rHit").textContent = hit;
-    document.getElementById("rMiss").textContent = miss;
-    document.getElementById("rRate").textContent = rate + "%";
+    document.getElementById("rScore").textContent = score + " 只";
+    document.getElementById("rHit").textContent = score;
+    document.getElementById("rSpeed").textContent = perSec.toFixed(1);
     document.getElementById("rStreak").textContent = maxStreak;
+    document.getElementById("rRank").textContent = rankOf(perSec);
     document.getElementById("rBest").textContent = score > oldBest
-      ? "🎉 破纪录了！之前的最高分是 " + oldBest
-      : "历史最高 " + oldBest + " 分，还差 " + (oldBest - score) + " 分";
+      ? "🎉 破纪录！上一局最高 " + oldBest + " 只"
+      : "历史最高 " + oldBest + " 只，还差 " + (oldBest - score) + " 只";
     document.getElementById("result").style.display = "block";
     document.getElementById("result").scrollIntoView({ behavior: "smooth", block: "center" });
+    hud();
   }
 
   hud();
