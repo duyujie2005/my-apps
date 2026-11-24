@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2b7cff">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>登录 · 我的软件柜</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    font-family: "Microsoft YaHei", -apple-system, "PingFang SC", sans-serif;
+    background: linear-gradient(160deg, #1b3a70 0%, #2b7cff 55%, #14d07a 130%);
+    padding: 24px;
+  }
+  .box {
+    width: 100%; max-width: 380px; background: #fff; border-radius: 18px;
+    padding: 26px 22px 20px; box-shadow: 0 18px 40px rgba(10,30,70,0.25);
+  }
+  .badge { font-size: 30px; line-height: 1; }
+  h1 { font-size: 21px; margin: 10px 0 4px; }
+  .sub { font-size: 12px; color: #8a929e; line-height: 1.7; margin: 0 0 18px; }
+  label { display: block; font-size: 13px; color: #55606e; margin: 12px 0 6px; }
+  input {
+    width: 100%; font-size: 15px; padding: 12px 13px; border: 1px solid #dfe3ea;
+    border-radius: 10px; background: #fbfcfd; outline: none; color: #222;
+  }
+  input:focus { border-color: #2b7cff; background: #fff; }
+  .btns { display: flex; gap: 10px; margin-top: 18px; }
+  .btns button {
+    flex: 1; font-size: 15px; padding: 12px 0; border: none; border-radius: 10px;
+    cursor: pointer; background: #2b7cff; color: #fff; font-weight: bold;
+  }
+  .btns button.ghost { background: #e9ecf1; color: #55606e; font-weight: normal; }
+  .btns button:disabled { opacity: .6; cursor: default; }
+  .msg { font-size: 13px; line-height: 1.6; margin: 14px 0 0; min-height: 20px; color: #d64545; }
+  .msg.ok { color: #2e9e63; }
+  .note { font-size: 12px; color: #8a929e; line-height: 1.7; margin-top: 16px; border-top: 1px dashed #e3e7ee; padding-top: 12px; }
+  .note a { color: #2b7cff; text-decoration: none; }
+</style>
+</head>
+<body>
+
+<div class="box">
+  <div class="badge">🧰</div>
+  <h1>我的软件柜</h1>
+  <p class="sub">一个账号通用全部功能：题库练习记录、错题本、记账数据都跟着账号走。</p>
+
+  <label>邮箱</label>
+  <input id="email" type="email" placeholder="例如 2648967109@qq.com" autocomplete="username">
+  <label>密码（至少 6 位）</label>
+  <input id="pwd" type="password" placeholder="输入密码" autocomplete="current-password">
+
+  <div class="btns">
+    <button id="btnLogin">登录</button>
+    <button id="btnSignup" class="ghost">注册新账号</button>
+  </div>
+
+  <p class="msg" id="msg"></p>
+
+  <p class="note">
+    第一次用先点“注册新账号”，注册成功后会自动登录。<br>
+    账号是云端保存的，换手机、换电脑登录同一个账号，数据都还在。<br>
+    <a href="index.html">← 返回软件柜</a>
+  </p>
+</div>
+
+<script src="auth.js"></script>
+<script src="supabase.js"></script>
+<script>
+  const SUPABASE_URL = "https://jrykjjhxfxdkntenilyd.supabase.co";
+  const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpyeWtqamh4Znhka250ZW5pbHlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU0MjUyMTcsImV4cCI6MjExMTAwMTIxN30.eEW940nO8CqJz6HB_4fZvPbbr4S10O5yhBLdXrLAZAg";
+
+  const params = new URLSearchParams(location.search);
+  const next = params.get("next") || "index.html";
+  const msg = document.getElementById("msg");
+
+  let sb = null;
+  try { sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY); window.SB_CLIENT = sb; } catch (e) {}
+
+  // 已经登录过就直接进目标页面
+  (function () {
+    if (AUTH.user()) { location.replace(next); }
+  })();
+
+  function say(text, ok) {
+    msg.textContent = text;
+    msg.className = "msg" + (ok ? " ok" : "");
+  }
+
+  function cnError(text) {
+    const m = String(text || "");
+    if (m.indexOf("Invalid login credentials") >= 0) { return "邮箱或密码不对，再核对一下。"; }
+    if (m.indexOf("already registered") >= 0) { return "这个邮箱已经注册过了，直接点登录。"; }
+    if (m.indexOf("Password should be") >= 0) { return "密码太短，至少要 6 位。"; }
+    if (m.indexOf("Unable to validate email") >= 0) { return "邮箱格式看着不对。"; }
+    if (m.indexOf("Email not confirmed") >= 0) { return "这个邮箱还没激活。"; }
+    if (m.indexOf("Failed to fetch") >= 0 || m.indexOf("NetworkError") >= 0) { return "连不上服务器，检查一下网络。"; }
+    return m;
+  }
+
+  function lock(on) {
+    document.getElementById("btnLogin").disabled = on;
+    document.getElementById("btnSignup").disabled = on;
+  }
+
+  document.getElementById("btnLogin").onclick = async function () {
+    const email = document.getElementById("email").value.trim();
+    const pwd = document.getElementById("pwd").value;
+    if (!email || !pwd) { say("邮箱和密码都要填。"); return; }
+    if (!sb) { say("登录组件没加载出来，刷新一下页面再试。"); return; }
+    lock(true); say("正在登录…", true);
+    const r = await sb.auth.signInWithPassword({ email: email, password: pwd });
+    lock(false);
+    if (r.error) { say(cnError(r.error.message)); return; }
+    AUTH.setUser(email);
+    say("登录成功，正在进入…", true);
+    location.replace(next);
+  };
+
+  document.getElementById("btnSignup").onclick = async function () {
+    const email = document.getElementById("email").value.trim();
+    const pwd = document.getElementById("pwd").value;
+    if (!email || !pwd) { say("邮箱和密码都要填。"); return; }
+    if (pwd.length < 6) { say("密码至少要 6 位。"); return; }
+    if (!sb) { say("登录组件没加载出来，刷新一下页面再试。"); return; }
+    lock(true); say("正在注册…", true);
+    const r = await sb.auth.signUp({ email: email, password: pwd });
+    lock(false);
+    if (r.error) { say(cnError(r.error.message)); return; }
+    AUTH.setUser(email);
+    say("注册成功，正在进入…", true);
+    location.replace(next);
+  };
+
+  document.getElementById("pwd").addEventListener("keydown", function (e) {
+    if (e.key === "Enter") { document.getElementById("btnLogin").click(); }
+  });
+</script>
+
+</body>
+</html>
