@@ -62,18 +62,18 @@
     el.appendChild(av); el.appendChild(nm); el.appendChild(tag); el.appendChild(out);
     document.body.appendChild(el);
 
-    // 显示"记录是否已跟账号同步"，让人一眼看得出来
-    if (window.SYNC) {
-      window.SYNC.online().then(function (ok) {
-        tag.textContent = ok ? "· ☁️已同步" : "· 仅本机";
-        tag.style.color = ok ? "#2e9e63" : "#c8862a";
-      }).catch(function () {});
-      window.SYNC.profile().then(function (p) {
-        if (!p) { return; }
-        av.innerHTML = window.AV ? window.AV(p.avatar, 18) : (p.avatar || "👤");
-        nm.textContent = p.nick || nm.textContent;
-      }).catch(function () {});
+    // 头像/名字/同步状态直接用本机缓存，先显示出来（不联网、不加载 108KB 的 supabase.js）
+    var cp = null;
+    try { cp = JSON.parse(localStorage.getItem("byProfile") || "null"); } catch (e) { cp = null; }
+    if (cp) {
+      if (window.AV) { av.innerHTML = window.AV(cp.avatar, 18); }
+      nm.textContent = cp.nick || nm.textContent;
     }
+    var flag = null;
+    try { flag = localStorage.getItem("bySyncFlag"); } catch (e) { flag = null; }
+    if (flag === "1") { tag.textContent = "· ☁️已同步"; tag.style.color = "#2e9e63"; }
+    else if (flag === "0") { tag.textContent = "· 仅本机"; tag.style.color = "#c8862a"; }
+    else { tag.textContent = ""; }
   }
 
   function logout() {
@@ -156,6 +156,7 @@ window.AV = function (a, px) {
       if (!sb) { return null; }
       return sb.auth.getSession().then(function (r) {
         var se = r && r.data ? r.data.session : null;
+        try { localStorage.setItem("bySyncFlag", se ? "1" : "0"); } catch (e) {}
         if (!se) { return null; }
         return fn(sb, se);
       });
@@ -378,4 +379,19 @@ window.AV = function (a, px) {
       });
     }
   };
+})();
+
+// 全局：手机/电脑上点一下就立刻有反馈（去掉点击高亮延迟，按钮按下缩一点）
+(function () {
+  var css = "*{-webkit-tap-highlight-color:transparent}" +
+    "button,a,.ava,.app,.fr{-webkit-touch-callout:none}" +
+    "button:active,.ava:active,.app:active{transform:scale(.97)}";
+  function put() {
+    try {
+      var s = document.createElement("style");
+      s.textContent = css;
+      document.head.appendChild(s);
+    } catch (e) {}
+  }
+  if (document.head) { put(); } else { document.addEventListener("DOMContentLoaded", put); }
 })();

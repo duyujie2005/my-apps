@@ -109,7 +109,7 @@
     <span id="best">历史最佳：--</span>
   </div>
 
-  <div class="stage" id="stage" onclick="handleClick()">
+  <div class="stage" id="stage">
     <div class="big" id="big">点击开始</div>
     <div class="hint" id="hint">看到变绿就立刻点</div>
   </div>
@@ -299,6 +299,12 @@
       show("点！", "越快越好", "go");
     }, delay);
   }
+
+  // 按下就记时（pointerdown 比 click 快 30~80ms，手指/鼠标一落下就算）
+  document.getElementById("stage").addEventListener("pointerdown", function (e) {
+    e.preventDefault();
+    handleClick();
+  });
 
   function handleClick() {
     if (state === "idle" || state === "done") { start(); return; }

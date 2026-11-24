@@ -69,7 +69,7 @@
 </div>
 
 <script src="auth.js"></script>
-<script src="supabase.js"></script>
+<script src="supabase.js" async></script>
 <script>
   const SUPABASE_URL = "https://jrykjjhxfxdkntenilyd.supabase.co";
   const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpyeWtqamh4Znhka250ZW5pbHlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU0MjUyMTcsImV4cCI6MjExMTAwMTIxN30.eEW940nO8CqJz6HB_4fZvPbbr4S10O5yhBLdXrLAZAg";
@@ -79,7 +79,17 @@
   const msg = document.getElementById("msg");
 
   let sb = null;
-  try { sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY); window.SB_CLIENT = sb; } catch (e) {}
+  // 登录组件用异步加载（页面先显示出来），点登录时再确认它就绪
+  function ensureSb() {
+    if (sb) { return sb; }
+    if (!window.supabase) { return null; }
+    try { sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY); window.SB_CLIENT = sb; } catch (e) { sb = null; }
+    return sb;
+  }
+  function waitSbReady(cb) {
+    if (ensureSb()) { cb(); return; }
+    setTimeout(function () { waitSbReady(cb); }, 20);
+  }
 
   // 已经登录过就直接进目标页面
   (function () {
@@ -107,33 +117,41 @@
     document.getElementById("btnSignup").disabled = on;
   }
 
-  document.getElementById("btnLogin").onclick = async function () {
+  document.getElementById("btnLogin").onclick = function () {
     const email = document.getElementById("email").value.trim();
     const pwd = document.getElementById("pwd").value;
     if (!email || !pwd) { say("邮箱和密码都要填。"); return; }
-    if (!sb) { say("登录组件没加载出来，刷新一下页面再试。"); return; }
     lock(true); say("正在登录…", true);
-    const r = await sb.auth.signInWithPassword({ email: email, password: pwd });
-    lock(false);
-    if (r.error) { say(cnError(r.error.message)); return; }
-    AUTH.setUser(email);
-    say("登录成功，正在进入…", true);
-    location.replace(next);
+    waitSbReady(function () {
+      const c = ensureSb();
+      if (!c) { lock(false); say("登录组件没加载出来，刷新一下页面再试。"); return; }
+      c.auth.signInWithPassword({ email: email, password: pwd }).then(function (r) {
+        lock(false);
+        if (r.error) { say(cnError(r.error.message)); return; }
+        AUTH.setUser(email);
+        say("登录成功，正在进入…", true);
+        location.replace(next);
+      });
+    });
   };
 
-  document.getElementById("btnSignup").onclick = async function () {
+  document.getElementById("btnSignup").onclick = function () {
     const email = document.getElementById("email").value.trim();
     const pwd = document.getElementById("pwd").value;
     if (!email || !pwd) { say("邮箱和密码都要填。"); return; }
     if (pwd.length < 6) { say("密码至少要 6 位。"); return; }
-    if (!sb) { say("登录组件没加载出来，刷新一下页面再试。"); return; }
     lock(true); say("正在注册…", true);
-    const r = await sb.auth.signUp({ email: email, password: pwd });
-    lock(false);
-    if (r.error) { say(cnError(r.error.message)); return; }
-    AUTH.setUser(email);
-    say("注册成功，正在进入…", true);
-    location.replace(next);
+    waitSbReady(function () {
+      const c = ensureSb();
+      if (!c) { lock(false); say("登录组件没加载出来，刷新一下页面再试。"); return; }
+      c.auth.signUp({ email: email, password: pwd }).then(function (r) {
+        lock(false);
+        if (r.error) { say(cnError(r.error.message)); return; }
+        AUTH.setUser(email);
+        say("注册成功，正在进入…", true);
+        location.replace(next);
+      });
+    });
   };
 
   document.getElementById("pwd").addEventListener("keydown", function (e) {

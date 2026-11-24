@@ -97,7 +97,6 @@
 <div class="toast" id="toast"></div>
 
 <script src="auth.js"></script>
-<script src="supabase.js"></script>
 <script>
 (function () {
   var me = null, myProfile = null, msgs = [], prof = {}, blocked = {}, timer = 0, busy = false;
@@ -195,16 +194,30 @@
     });
   }
 
-  function load() {
-    return Promise.all([window.SYNC.worldList(80), window.SYNC.profile(true), window.SYNC.blockedIds()]).then(function (res) {
+  function load(full) {
+    var tasks = [window.SYNC.worldList(80)];
+    if (full === false) {
+      tasks.push(Promise.resolve(myProfile), Promise.resolve(blocked));   // 轮询时不重复取，省时间
+    } else {
+      tasks.push(window.SYNC.profile(true), window.SYNC.blockedIds());
+    }
+    return Promise.all(tasks).then(function (res) {
       msgs = res[0] || [];
-      myProfile = res[1] || {};
-      blocked = res[2] || {};
+      if (full !== false) {
+        myProfile = res[1] || {};
+        blocked = res[2] || {};
+      }
       var mine = msgs.map(function (m) { return m.user_id; });
       if (myProfile && myProfile.id) { mine.push(myProfile.id); }
       var uniq = mine.filter(function (v, i) { return v && mine.indexOf(v) === i; });
-      return window.SYNC.profilesByIds(uniq).then(function (m) {
-        prof = m || {};
+      var need = uniq.filter(function (id) { return !prof[id]; });          // 只查没见过的人
+      if (!need.length) {
+        renderBar();
+        render();
+        return true;
+      }
+      return window.SYNC.profilesByIds(need).then(function (m) {
+        for (var k in (m || {})) { if (Object.prototype.hasOwnProperty.call(m, k)) { prof[k] = m[k]; } }
         renderBar();
         render();
       });
@@ -242,7 +255,7 @@
       timer = setInterval(function () {
         if (busy || document.hidden) { return; }
         busy = true;
-        load().catch(function () {}).then(function () { busy = false; });
+        load(false).catch(function () {}).then(function () { busy = false; });
       }, 4000);
     });
   }

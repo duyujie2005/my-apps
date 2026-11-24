@@ -1,6 +1,6 @@
 /* 杜裕杰的软件柜 · 离线缓存（Service Worker）
-   作用：第一次打开把页面存到手机/电脑本地，以后断网也能打开。 */
-const CACHE = "shelf-v12";
+   策略：先用本地缓存立刻显示（几乎 0 延迟），同时后台悄悄下载最新版，下次打开就是新版。 */
+const CACHE = "shelf-v14";
 
 const FILES = [
   "./",
@@ -8,8 +8,8 @@ const FILES = [
   "login.html",
   "auth.js",
   "friends.html",
-  "world.html",
   "me.html",
+  "world.html",
   "jizhangben.html",
   "tiku.html",
   "kuaiji.html",
@@ -20,23 +20,19 @@ const FILES = [
   "reflex.html",
   "hero.html",
   "manifest.json",
-  "icon-192.png",
-  "icon-512.png",
-  "apple-touch-icon.png",
+  "logo-96.png",
   "libai.png",
   "supabase.js"
 ];
 
-// 安装：把清单里的文件一次性存进本地缓存
 self.addEventListener("install", function (event) {
   event.waitUntil(
     caches.open(CACHE).then(function (cache) {
       return cache.addAll(FILES);
-    }).then(function () { return self.skipWaiting(); })
+    }).catch(function () {}).then(function () { return self.skipWaiting(); })
   );
 });
 
-// 激活：清掉旧版本的缓存
 self.addEventListener("activate", function (event) {
   event.waitUntil(
     caches.keys().then(function (keys) {
@@ -46,53 +42,37 @@ self.addEventListener("activate", function (event) {
   );
 });
 
-// 取文件：页面优先走网络（保证是最新版），断网就用本地缓存
+// 后台更新缓存，不阻塞页面
+function refresh(req) {
+  return fetch(req).then(function (res) {
+    if (res && res.ok && res.type !== "opaque") {
+      const copy = res.clone();
+      caches.open(CACHE).then(function (c) { c.put(req, copy); });
+    }
+    return res;
+  }).catch(function () { return null; });
+}
+
 self.addEventListener("fetch", function (event) {
   const req = event.request;
   if (req.method !== "GET") { return; }
-  const url = new URL(req.url);
-  if (url.origin !== self.location.origin) { return; }   // 外站资源不接管
+  let url;
+  try { url = new URL(req.url); } catch (e) { return; }
+  if (url.origin !== self.location.origin) { return; }
 
-  if (req.mode === "navigate") {
-    event.respondWith(
-      fetch(req).then(function (res) {
-        const copy = res.clone();
-        caches.open(CACHE).then(function (c) { c.put(req, copy); });
-        return res;
-      }).catch(function () {
-        return caches.match(req).then(function (r) { return r || caches.match("index.html"); });
-      })
-    );
-    return;
-  }
-
-  // 代码类文件（html/js/css/json）一律先走网络，保证每次更新都能立刻生效；断网才用缓存
-  const isCode = /\.(html|js|css|json)$/.test(url.pathname) || url.pathname.endsWith("/");
-  if (isCode) {
-    event.respondWith(
-      fetch(req).then(function (res) {
-        if (res && res.ok) {
-          const copy = res.clone();
-          caches.open(CACHE).then(function (c) { c.put(req, copy); });
-        }
-        return res;
-      }).catch(function () {
-        return caches.match(req).then(function (r) { return r || caches.match("index.html"); });
-      })
-    );
-    return;
-  }
-
-  // 图片等静态资源仍走缓存优先，省流量、断网也能看
   event.respondWith(
-    caches.match(req).then(function (hit) {
-      if (hit) { return hit; }
-      return fetch(req).then(function (res) {
-        if (res && res.ok) {
-          const copy = res.clone();
-          caches.open(CACHE).then(function (c) { c.put(req, copy); });
-        }
-        return res;
+    caches.match(req, { ignoreSearch: true }).then(function (hit) {
+      if (hit) {
+        refresh(req);                        // 后台悄悄更新，页面不等
+        return hit;
+      }
+      return refresh(req).then(function (res) {
+        if (res) { return res; }
+        if (req.mode === "navigate") { return caches.match("index.html"); }
+        return new Response("", { status: 504 });
+      }).catch(function () {
+        if (req.mode === "navigate") { return caches.match("index.html"); }
+        return new Response("", { status: 504 });
       });
     })
   );

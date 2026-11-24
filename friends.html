@@ -160,7 +160,7 @@
 <div class="toast" id="toast"></div>
 
 <script src="auth.js"></script>
-<script src="supabase.js"></script>
+<script src="supabase.js" async></script>
 <script>
   const SUPABASE_URL = "https://jrykjjhxfxdkntenilyd.supabase.co";
   const SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpyeWtqamh4Znhka250ZW5pbHlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU0MjUyMTcsImV4cCI6MjExMTAwMTIxN30.eEW940nO8CqJz6HB_4fZvPbbr4S10O5yhBLdXrLAZAg";
@@ -603,8 +603,16 @@
     b.addEventListener("click", function () { challenge(b.getAttribute("data-game")); });
   });
 
-  boot().catch(function (e) {
-    document.getElementById("frList").innerHTML = '<div class="empty">加载失败：' + e.message + '</div>';
+  // supabase.js 用异步加载（页面先画出来，再开始连云端），所以这里等它就绪
+  function waitSupabase(cb) {
+    if (window.supabase) { cb(); return; }
+    setTimeout(function () { waitSupabase(cb); }, 20);
+  }
+
+  waitSupabase(function () {
+    boot().catch(function (e) {
+      document.getElementById("frList").innerHTML = '<div class="empty">加载失败：' + e.message + '</div>';
+    });
   });
 </script>
 </body>
