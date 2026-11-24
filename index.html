@@ -99,6 +99,22 @@
   }
   .ghostbtn:hover { border-color: #2b7cff; color: #cfe0ff; }
 
+  .boardbox {
+    margin: 6px 0 0; background: linear-gradient(180deg, #1a2333, #161e2b);
+    border: 1px solid #202c40; border-radius: 16px; padding: 14px 16px;
+  }
+  .boardbox:empty { display: none; }
+  .bbTitle { font-size: 13px; color: #b9c9de; display: flex; justify-content: space-between; margin-bottom: 8px; }
+  .bbTitle span { color: #66748a; font-size: 11px; }
+  .bbRow { display: flex; align-items: center; gap: 10px; font-size: 12px; color: #93a5bd; padding: 5px 0; border-top: 1px dashed #233149; }
+  .bbRow:first-of-type { border-top: none; }
+  .bbRow .rk { width: 18px; color: #66748a; }
+  .bbRow .rk.g { color: #ffd166; font-weight: 700; }
+  .bbRow .nm { flex: 1; color: #dbe6f5; }
+  .bbRow .vl { color: #7fb0ff; font-weight: 600; }
+  .bbRow .dt { width: 74px; text-align: right; color: #5b6a80; font-size: 11px; }
+  .bbEmpty { font-size: 12px; color: #66748a; }
+  @media (max-width: 480px) { .bbRow .dt { width: 62px; } }
   @media (max-width: 480px) {
     body { padding: 0 12px 32px; }
     .hero { margin: 0 -12px 16px; padding: 22px 16px 18px; }
@@ -125,6 +141,8 @@
 
 <div id="list"></div>
 
+<div class="boardbox" id="boards"></div>
+
 <p class="foot">
   <b>变成手机 App：</b>浏览器菜单 →「添加到主屏幕」，就有独立图标，打开没有地址栏。<br>
   <b>断网怎么办：</b>本机已经缓存好了，飞行模式下也能打开题库和游戏；记账本要联网才能同步云端。<br>
@@ -146,10 +164,10 @@
       desc: "邮箱登录 · 账目存云端 · 多设备同一份", sec: "效率工具",
       tags: [["cloud", "需联网"], ["", "云端同步"], ["", "可导出"]] },
     { id: "whack", name: "打地鼠", icon: "🐭", cls: "c", href: "whack.html",
-      desc: "15 秒 · 打李白 · 零等待连打", sec: "小游戏",
+      desc: "15 秒 · 打李白 · 点格子任意位置都算", sec: "小游戏",
       tags: [["off", "离线可用"], ["", "最高分"] ] },
     { id: "reflex", name: "测反射弧", icon: "⚡", cls: "d", href: "reflex.html",
-      desc: "8 / 12 / 20 轮 · 反应毫秒 · 成绩曲线", sec: "小游戏",
+      desc: "5 次取平均 · 超 500ms 不计 · 记录榜", sec: "小游戏",
       tags: [["off", "离线可用"], ["", "历史最佳"] ] }
   ];
 
@@ -219,8 +237,53 @@
     });
   });
 
+
+  // ---------- 游戏记录榜 ----------
+  function boardKey(prefix) {
+    let u = "guest";
+    try { const s = AUTH.user(); if (s && s.email) { u = s.email; } } catch (e) {}
+    return prefix + ":" + u;
+  }
+  function readBoard(prefix) {
+    try {
+      const a = JSON.parse(localStorage.getItem(boardKey(prefix)) || "[]");
+      return Array.isArray(a) ? a : [];
+    } catch (e) { return []; }
+  }
+  function fmtDate(ts) {
+    const d = new Date(ts);
+    const p = function (n) { return n < 10 ? "0" + n : "" + n; };
+    return (d.getMonth() + 1) + "/" + d.getDate() + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+  function rowsHtml(list, unit) {
+    if (!list.length) { return '<div class="bbEmpty">还没有记录，去玩一局就上榜</div>'; }
+    return list.slice(0, 3).map(function (r, i) {
+      return '<div class="bbRow"><span class="rk' + (i === 0 ? " g" : "") + '">' + (i + 1) + '</span>' +
+        '<span class="nm">' + r.score + ' 只</span>' +
+        '<span class="vl">' + (r.avg ? r.avg + "ms/只" : "--") + '</span>' +
+        '<span class="dt">' + fmtDate(r.ts) + '</span></div>';
+    }).join("");
+  }
+  function rowsHtmlRt(list) {
+    if (!list.length) { return '<div class="bbEmpty">还没有记录，去测一局就上榜</div>'; }
+    return list.slice(0, 3).map(function (r, i) {
+      return '<div class="bbRow"><span class="rk' + (i === 0 ? " g" : "") + '">' + (i + 1) + '</span>' +
+        '<span class="nm">平均 ' + r.avg + ' ms</span>' +
+        '<span class="vl">' + (r.valid ? r.valid + "/5 有效" : "") + '</span>' +
+        '<span class="dt">' + fmtDate(r.ts) + '</span></div>';
+    }).join("");
+  }
+  function renderBoards() {
+    const w = readBoard("whackBoard");
+    const r = readBoard("rtBoard");
+    document.getElementById("boards").innerHTML =
+      '<div class="boardbox"><div class="bbTitle"><b>🏆 打地鼠榜</b><span>前 3 名</span></div>' + rowsHtml(w) + '</div>' +
+      '<div class="boardbox" style="margin-top:10px"><div class="bbTitle"><b>🏆 反射弧榜</b><span>前 3 名 · 平均越快越前</span></div>' + rowsHtmlRt(r) + '</div>';
+  }
+
   setState();
   render();
+  renderBoards();
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(function () {});

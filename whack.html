@@ -39,15 +39,19 @@
 
   #board {
     display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px; justify-content: center; max-width: 340px; margin: 0 auto 16px;
+    gap: 4px; justify-content: center; max-width: 340px; margin: 0 auto 16px;
+    touch-action: manipulation; cursor: pointer;
   }
   .hole {
     aspect-ratio: 1 / 1; border-radius: 14px; background: #1a2434;
     border: 1px solid #233048; font-size: 34px;
     display: flex; align-items: center; justify-content: center;
-    cursor: pointer; transition: transform 0.06s, background 0.08s;
+    pointer-events: none; transition: transform 0.06s, background 0.08s, box-shadow 0.08s;
   }
-  .hole.mole { background: linear-gradient(180deg, #ffd166, #f5b42a); border-color: #ffd166; transform: translateY(-3px); }
+  .hole.mole {
+    background: linear-gradient(180deg, #ffd166, #f5b42a); border-color: #ffd166;
+    box-shadow: 0 0 0 3px #ffd16655, 0 8px 20px #f5b42a55;
+  }
   .hole .hero {
     width: 82%; height: 82%; object-fit: contain;
     display: none; pointer-events: none; user-select: none;
@@ -70,13 +74,30 @@
   .stats { display: flex; justify-content: space-around; font-size: 12px; color: #9db0cc; }
   .stats b { display: block; font-size: 17px; color: #e9eef7; margin-top: 3px; }
   .bestline { margin-top: 12px; font-size: 13px; color: #16c47f; }
+
+  .board {
+    max-width: 340px; margin: 0 auto 16px; background: #16203099; border: 1px solid #24314a;
+    border-radius: 16px; padding: 12px 14px; text-align: left;
+  }
+  .board .t { font-size: 12px; color: #9db0cc; margin-bottom: 8px; display: flex; justify-content: space-between; }
+  .board .t span { color: #5f6f85; }
+  .row { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #9db0cc; padding: 5px 0; border-top: 1px dashed #22314a; }
+  .row:first-of-type { border-top: none; }
+  .row .rk { width: 20px; color: #7d90ab; }
+  .row .rk.g { color: #ffd166; font-weight: 700; }
+  .row .sc { width: 62px; color: #e9eef7; font-weight: 600; }
+  .row .sp { width: 74px; }
+  .row .dt { margin-left: auto; color: #5f6f85; font-size: 11px; }
+  .row.me { background: #2b7cff14; border-radius: 8px; }
+  .empty { font-size: 12px; color: #7d90ab; padding: 6px 0; text-align: center; }
+
   .tip { font-size: 12px; color: #7d90ab; margin-top: 14px; line-height: 1.8; }
 </style>
 <script src="auth.js" data-guard="1"></script>
 </head>
 <body>
 <h1>打地鼠 · 李白版</h1>
-<p class="sub">15 秒 · 李白一直在，打掉一个立刻换下一个</p>
+<p class="sub">15 秒 · 李白一直在，打掉一个立刻换下一个 · 点格子哪里都算</p>
 
 <div class="hud">
   <div class="box"><span>得分</span><b id="score">0</b></div>
@@ -103,7 +124,13 @@
 </div>
 
 <button class="start" id="btnStart" onclick="startGame()">开始游戏</button>
-<p class="tip">开始后李白一出现就立刻打，打中马上换下一个，中间没有任何等待。15 秒内看你能打多少个。</p>
+
+<div class="board">
+  <div class="t"><b>🏆 打地鼠榜</b><span id="boardTip">本机前 5 名</span></div>
+  <div id="boardList"><p class="empty">还没有记录，打一局就上榜</p></div>
+</div>
+
+<p class="tip">开始后李白一出现就立刻打，打中马上换下一个，中间没有任何等待。<br>整个格子（连格子边、格子之间的缝）都算命中，手不用点得那么准。</p>
 
 <a class="back" href="index.html">← 软件柜</a>
 
@@ -121,9 +148,31 @@
     d.className = "hole";
     d.dataset.i = i;
     d.innerHTML = '<img class="hero" src="libai.png" alt="李白" draggable="false">';
-    d.onclick = function () { hitHole(i, d); };
     board.appendChild(d);
   }
+
+  // 整块格子板接管点击：按“离哪个洞最近”来判定，点格子内、格子边、格子缝都算
+  function nearestHole(x, y) {
+    const all = board.getBoundingClientRect();
+    // 稍微放宽一点：点到板子外 14px 以内也算
+    if (x < all.left - 14 || x > all.right + 14 || y < all.top - 14 || y > all.bottom + 14) { return -1; }
+    let best = -1, bestD = Infinity;
+    for (let i = 0; i < HOLES; i++) {
+      const r = board.children[i].getBoundingClientRect();
+      const dx = x - (r.left + r.width / 2);
+      const dy = y - (r.top + r.height / 2);
+      const d = dx * dx + dy * dy;
+      if (d < bestD) { bestD = d; best = i; }
+    }
+    return best;
+  }
+
+  board.addEventListener("pointerdown", function (e) {
+    if (!running) { return; }
+    e.preventDefault();
+    const i = nearestHole(e.clientX, e.clientY);
+    if (i >= 0) { hitHole(i); }
+  }, { passive: false });
 
   function beep(freq, dur, type) {
     try {
@@ -138,7 +187,53 @@
     } catch (e) {}
   }
 
-  function best() { return Number(localStorage.getItem("whackBest") || 0); }
+  // 每个账号一份榜单；没登录时用 guest
+  function boardKey() {
+    let u = "guest";
+    try { const s = AUTH.user(); if (s && s.email) { u = s.email; } } catch (e) {}
+    return "whackBoard:" + u;
+  }
+  function best() {
+    const b = loadBoard();
+    return b.length ? b[0].score : Number(localStorage.getItem("whackBest") || 0);
+  }
+  function loadBoard() {
+    try {
+      const arr = JSON.parse(localStorage.getItem(boardKey()) || "[]");
+      return Array.isArray(arr) ? arr : [];
+    } catch (e) { return []; }
+  }
+  function saveRecord(rec) {
+    const list = loadBoard();
+    list.push(rec);
+    list.sort(function (a, b) {
+      if (b.score !== a.score) { return b.score - a.score; }
+      return a.avg - b.avg;
+    });
+    const top = list.slice(0, 10);
+    localStorage.setItem(boardKey(), JSON.stringify(top));
+    if (rec.score > Number(localStorage.getItem("whackBest") || 0)) {
+      localStorage.setItem("whackBest", String(rec.score));
+    }
+    return top;
+  }
+  function fmtDate(ts) {
+    const d = new Date(ts);
+    const p = function (n) { return n < 10 ? "0" + n : "" + n; };
+    return (d.getMonth() + 1) + "/" + d.getDate() + " " + p(d.getHours()) + ":" + p(d.getMinutes());
+  }
+  function renderBoard(highlightTs) {
+    const list = loadBoard().slice(0, 5);
+    const box = document.getElementById("boardList");
+    if (!list.length) { box.innerHTML = '<p class="empty">还没有记录，打一局就上榜</p>'; return; }
+    box.innerHTML = list.map(function (r, i) {
+      return '<div class="row' + (highlightTs && r.ts === highlightTs ? " me" : "") + '">' +
+        '<span class="rk' + (i === 0 ? " g" : "") + '">' + (i + 1) + '</span>' +
+        '<span class="sc">' + r.score + ' 只</span>' +
+        '<span class="sp">' + (r.avg ? r.avg + 'ms/只' : '--') + '</span>' +
+        '<span class="dt">' + fmtDate(r.ts) + '</span></div>';
+    }).join("");
+  }
 
   function hud() {
     document.getElementById("score").textContent = score;
@@ -157,10 +252,11 @@
     board.children[i].classList.add("mole");
   }
 
-  function hitHole(i, el) {
+  function hitHole(i) {
     if (!running) { return; }
     if (i !== moleIdx) { beep(200, 0.05, "sawtooth"); return; }   // 打偏了不给分，也不算错
 
+    const el = board.children[i];
     score = score + 1;
     streak = streak + 1;
     if (streak > maxStreak) { maxStreak = streak; }
@@ -180,6 +276,7 @@
     document.getElementById("result").style.display = "none";
     document.getElementById("btnStart").style.display = "none";
     document.getElementById("timebar").style.width = "100%";
+    renderBoard();
     hud();
     startTs = performance.now();
     nextMole();
@@ -216,8 +313,10 @@
     document.getElementById("btnStart").style.display = "none";   // 结算卡片里已有“再来一局”，底下按钮隐藏，避免重复
 
     const oldBest = best();
-    if (score > oldBest) { localStorage.setItem("whackBest", String(score)); }
     const avgMs = score > 0 ? Math.round(TOTAL_SEC * 1000 / score) : 0;
+    const ts = Date.now();
+    const list = saveRecord({ score: score, avg: avgMs, streak: maxStreak, ts: ts });
+    const rank = list.findIndex(function (x) { return x.ts === ts; }) + 1;
 
     document.getElementById("rScore").textContent = score + " 只";
     document.getElementById("rHit").textContent = score;
@@ -229,10 +328,13 @@
       : "历史最高 " + oldBest + " 只，还差 " + (oldBest - score) + " 只";
     document.getElementById("result").style.display = "block";
     document.getElementById("result").scrollIntoView({ behavior: "smooth", block: "center" });
+    renderBoard(ts);
+    document.getElementById("boardTip").textContent = rank > 0 ? "这局排第 " + rank : "本机前 5 名";
     hud();
   }
 
   hud();
+  renderBoard();
   if ("serviceWorker" in navigator) { navigator.serviceWorker.register("sw.js").catch(function () {}); }
 </script>
 </body>

@@ -1,6 +1,6 @@
 /* 杜裕杰的软件柜 · 离线缓存（Service Worker）
    作用：第一次打开把页面存到手机/电脑本地，以后断网也能打开。 */
-const CACHE = "shelf-v5";
+const CACHE = "shelf-v6";
 
 const FILES = [
   "./",
