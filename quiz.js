@@ -29,8 +29,36 @@
   var timer = null;
   var view = "quiz";
 
-  function saveWrong() { localStorage.setItem(KEYS.wrong, JSON.stringify(Array.from(wrongSet))); }
-  function saveMaster() { localStorage.setItem(KEYS.master, JSON.stringify(Array.from(masterSet))); }
+  function saveWrong() { localStorage.setItem(KEYS.wrong, JSON.stringify(Array.from(wrongSet))); schedulePush(); }
+  function saveMaster() { localStorage.setItem(KEYS.master, JSON.stringify(Array.from(masterSet))); schedulePush(); }
+
+  // ---------- 跨设备同步（登录同一账号后，错题/掌握记录跟着账号走） ----------
+  var SYNC_KEY = "quiz:" + (KEYS.wrong || "qzWrong");
+  var pushTimer = null;
+  function schedulePush() {
+    if (!window.SYNC) { return; }
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(pushCloud, 800);
+  }
+  function pushCloud() {
+    if (!window.SYNC) { return; }
+    window.SYNC.set(SYNC_KEY, { wrong: Array.from(wrongSet), master: Array.from(masterSet) }).catch(function () {});
+  }
+  function cloudMerge() {
+    if (!window.SYNC) { return; }
+    window.SYNC.get(SYNC_KEY).then(function (d) {
+      if (!d) { pushCloud(); return; }
+      var changed = false;
+      (d.wrong || []).forEach(function (t) { if (!wrongSet.has(t)) { wrongSet.add(t); changed = true; } });
+      (d.master || []).forEach(function (t) { if (!masterSet.has(t)) { masterSet.add(t); changed = true; } });
+      if (changed) {
+        localStorage.setItem(KEYS.wrong, JSON.stringify(Array.from(wrongSet)));
+        localStorage.setItem(KEYS.master, JSON.stringify(Array.from(masterSet)));
+        buildChips(); setSubtitle(); updateStat(); updateProg();
+      }
+      pushCloud();
+    }).catch(function () {});
+  }
 
   function optionText(q) { return q.t === "judge" ? ["正确", "错误"] : q.o; }
   function isRight(q, chosen) {
@@ -203,6 +231,7 @@
     masterSet = new Set();
     localStorage.removeItem(KEYS.wrong);
     localStorage.removeItem(KEYS.master);
+    pushCloud();
     buildChips();
     setSubtitle();
     start();
@@ -381,6 +410,7 @@
   buildChips();
   setSubtitle();
   setMode("order");
+  cloudMerge();
 
   if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("sw.js").catch(function () {});

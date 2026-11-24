@@ -169,7 +169,31 @@
     const top = list.slice(0, 10);
     localStorage.setItem(boardKey(), JSON.stringify(top));
     localStorage.setItem("rtBest", JSON.stringify({ avg: top[0].avg, rounds: ROUNDS }));
+    syncPush();
     return top;
+  }
+
+  // ---------- 跨设备同步：登录同一账号，榜单跟着账号走 ----------
+  function syncPull() {
+    if (!window.SYNC) { return; }
+    window.SYNC.get("reflex").then(function (d) {
+      if (!d || !Array.isArray(d.board)) { return; }
+      const local = loadBoard();
+      const seen = {};
+      local.forEach(function (r) { if (r && r.ts) { seen[r.ts] = 1; } });
+      const merged = local.slice();
+      d.board.forEach(function (r) { if (r && r.ts && !seen[r.ts]) { merged.push(r); seen[r.ts] = 1; } });
+      merged.sort(function (a, b) { return a.avg - b.avg; });
+      const top = merged.slice(0, 10);
+      if (!top.length) { return; }
+      localStorage.setItem(boardKey(), JSON.stringify(top));
+      localStorage.setItem("rtBest", JSON.stringify({ avg: top[0].avg, rounds: ROUNDS }));
+      try { renderBoard(); showBest(); } catch (e) {}
+    }).catch(function () {});
+  }
+  function syncPush() {
+    if (!window.SYNC) { return; }
+    window.SYNC.set("reflex", { board: loadBoard(), best: loadBoard()[0] || null }).catch(function () {});
   }
   function fmtDate(ts) {
     const d = new Date(ts);
@@ -326,6 +350,7 @@
 
   reset();
   showBest();
+  syncPull();
   if ("serviceWorker" in navigator) { navigator.serviceWorker.register("sw.js").catch(function () {}); }
 </script>
 </body>

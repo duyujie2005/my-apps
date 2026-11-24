@@ -74,3 +74,71 @@
     }
   }
 })();
+
+// ---------- 云端同步（跨设备：题库掌握/错题、游戏榜单） ----------
+// 依赖 supabase.js；没加载就动态补上。没登录或不联网时自动退回本机存储。
+(function () {
+  var URL_ = "https://jrykjjhxfxdkntenilyd.supabase.co";
+  var KEY_ = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpyeWtqamh4Znhka250ZW5pbHlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU0MjUyMTcsImV4cCI6MjExMTAwMTIxN30.eEW940nO8CqJz6HB_4fZvPbbr4S10O5yhBLdXrLAZAg";
+  var readyP = null;
+
+  function ensure() {
+    if (window.SB_CLIENT) { return Promise.resolve(window.SB_CLIENT); }
+    if (readyP) { return readyP; }
+    readyP = new Promise(function (res) {
+      function mk() {
+        try {
+          window.SB_CLIENT = supabase.createClient(URL_, KEY_);
+        } catch (e) { window.SB_CLIENT = null; }
+        res(window.SB_CLIENT);
+      }
+      if (window.supabase) { mk(); return; }
+      var s = document.createElement("script");
+      s.src = "supabase.js";
+      s.onload = mk;
+      s.onerror = function () { res(null); };
+      document.head.appendChild(s);
+    });
+    return readyP;
+  }
+
+  function withSession(fn) {
+    return ensure().then(function (sb) {
+      if (!sb) { return null; }
+      return sb.auth.getSession().then(function (r) {
+        var se = r && r.data ? r.data.session : null;
+        if (!se) { return null; }
+        return fn(sb, se);
+      });
+    });
+  }
+
+  window.SYNC = {
+    ready: ensure,
+    // 有云端账号会话吗？（用于界面上提示"已同步 / 仅本机"）
+    online: function () {
+      return withSession(function () { return true; }).catch(function () { return false; }).then(function (v) { return !!v; });
+    },
+    get: function (app) {
+      return withSession(function (sb) {
+        return sb.from("appdata").select("data").eq("app", app).maybeSingle().then(function (x) {
+          if (x.error) { throw x.error; }
+          return x.data ? x.data.data : null;
+        });
+      });
+    },
+    set: function (app, data) {
+      return withSession(function (sb, se) {
+        return sb.from("appdata").upsert({
+          user_id: se.user.id,
+          app: app,
+          data: data,
+          updated_at: new Date().toISOString()
+        }, { onConflict: "user_id,app" }).then(function (x) {
+          if (x.error) { throw x.error; }
+          return true;
+        });
+      });
+    }
+  };
+})();
