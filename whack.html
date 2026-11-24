@@ -6,6 +6,7 @@
 <meta name="theme-color" content="#101521">
 <link rel="manifest" href="manifest.json">
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
+<link rel="preload" as="image" href="libai.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="软件柜">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -47,6 +48,11 @@
     cursor: pointer; transition: transform 0.06s, background 0.08s;
   }
   .hole.mole { background: linear-gradient(180deg, #ffd166, #f5b42a); border-color: #ffd166; transform: translateY(-3px); }
+  .hole .hero {
+    width: 82%; height: 82%; object-fit: contain;
+    display: none; pointer-events: none; user-select: none;
+  }
+  .hole.mole .hero { display: block; }
   .hole.hit { animation: pop 0.16s ease; }
   @keyframes pop { 0% { transform: scale(1); } 45% { transform: scale(1.14); } 100% { transform: scale(1); } }
 
@@ -68,13 +74,13 @@
 </style>
 </head>
 <body>
-<h1>打地鼠</h1>
-<p class="sub">30 秒 · 老鼠一直在，打掉一只立刻换下一只</p>
+<h1>打地鼠 · 李白版</h1>
+<p class="sub">15 秒 · 李白一直在，打掉一个立刻换下一个</p>
 
 <div class="hud">
   <div class="box"><span>得分</span><b id="score">0</b></div>
   <div class="box"><span>连击</span><b id="streak">0</b></div>
-  <div class="box"><span>剩余</span><b id="left">30</b></div>
+  <div class="box"><span>剩余</span><b id="left">15</b></div>
   <div class="box"><span>最高</span><b id="best">0</b></div>
 </div>
 
@@ -96,23 +102,24 @@
 </div>
 
 <button class="start" id="btnStart" onclick="startGame()">开始游戏</button>
-<p class="tip">开始后老鼠一出现就立刻打，打中马上换下一只，中间没有任何等待。30 秒内看你能打多少只。</p>
+<p class="tip">开始后李白一出现就立刻打，打中马上换下一个，中间没有任何等待。15 秒内看你能打多少个。</p>
 
 <a class="back" href="index.html">← 软件柜</a>
 
 <script>
   const HOLES = 9;
-  const TOTAL_SEC = 30;
+  const TOTAL_SEC = 15;
   const board = document.getElementById("board");
 
   let score = 0, streak = 0, maxStreak = 0, left = TOTAL_SEC;
-  let running = false, moleIdx = -1, startTs = 0, tickId = 0, lastSec = 30;
+  let running = false, moleIdx = -1, startTs = 0, tickId = 0, lastSec = TOTAL_SEC;
   let audioCtx = null;
 
   for (let i = 0; i < HOLES; i++) {
     const d = document.createElement("div");
     d.className = "hole";
     d.dataset.i = i;
+    d.innerHTML = '<img class="hero" src="libai.png" alt="李白" draggable="false">';
     d.onclick = function () { hitHole(i, d); };
     board.appendChild(d);
   }
@@ -139,19 +146,14 @@
     document.getElementById("best").textContent = best();
   }
 
-  // 立刻清场并放下一只：不等、不延时、不重复同一个洞
+  // 立刻清场并放下一个：不等、不延时、不重复同一个洞
   function nextMole() {
     if (!running) { return; }
-    for (const h of board.children) {
-      h.classList.remove("mole");
-      h.textContent = "";
-    }
+    for (const h of board.children) { h.classList.remove("mole"); }
     let i = Math.floor(Math.random() * HOLES);
     if (HOLES > 1 && i === moleIdx) { i = (i + 1 + Math.floor(Math.random() * (HOLES - 1))) % HOLES; }
     moleIdx = i;
-    const hole = board.children[i];
-    hole.classList.add("mole");
-    hole.textContent = "🐭";
+    board.children[i].classList.add("mole");
   }
 
   function hitHole(i, el) {
@@ -172,7 +174,7 @@
   function startGame() {
     if (running) { return; }
     running = true;
-    score = 0; streak = 0; maxStreak = 0; left = TOTAL_SEC; lastSec = 30;
+    score = 0; streak = 0; maxStreak = 0; left = TOTAL_SEC; lastSec = TOTAL_SEC;
     moleIdx = -1;
     document.getElementById("result").style.display = "none";
     document.getElementById("btnStart").style.display = "none";
@@ -207,7 +209,7 @@
     clearInterval(tickId);
     left = 0;
     moleIdx = -1;
-    for (const h of board.children) { h.classList.remove("mole"); h.textContent = ""; }
+    for (const h of board.children) { h.classList.remove("mole"); }
     document.getElementById("timebar").style.width = "0%";
     document.getElementById("left").textContent = "0";
     document.getElementById("btnStart").style.display = "none";   // 结算卡片里已有“再来一局”，底下按钮隐藏，避免重复
