@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#2b7cff">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="软件柜">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>初级消控题库</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    padding: 16px;
+    font-family: "Microsoft YaHei", -apple-system, "PingFang SC", sans-serif;
+    background: #f5f6f8;
+    color: #222;
+  }
+  h1 { font-size: 19px; margin: 0 0 4px; }
+  .sub { font-size: 12px; color: #8a929e; margin: 0 0 14px; line-height: 1.7; }
+
+  .chips { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+  .chip {
+    font-size: 14px; padding: 7px 14px; border-radius: 20px;
+    border: 1px solid #d6d9de; background: #fff; color: #555;
+    cursor: pointer;
+  }
+  .chip.on { background: #2b7cff; border-color: #2b7cff; color: #fff; }
+
+  .bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .bar button {
+    font-size: 14px; padding: 8px 14px; border: none; border-radius: 8px;
+    background: #e9ecf1; color: #555; cursor: pointer;
+  }
+  .bar button:hover { background: #dde1e8; }
+
+  .card {
+    background: #fff; border-radius: 12px; padding: 16px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  .meta { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #8a929e; margin-bottom: 10px; flex-wrap: wrap; }
+  .tag { background: #eef2f8; color: #4a6f9e; padding: 3px 8px; border-radius: 6px; }
+  .tag.type { background: #fdf1e3; color: #a5601a; }
+  .qtext { font-size: 16px; line-height: 1.6; margin: 6px 0 14px; white-space: pre-wrap; }
+
+  .opt {
+    display: block; width: 100%; text-align: left;
+    font-size: 15px; line-height: 1.5; padding: 11px 14px; margin-bottom: 8px;
+    border: 1px solid #dfe3ea; border-radius: 9px; background: #fbfcfd;
+    cursor: pointer; color: #222;
+  }
+  .opt:hover { border-color: #2b7cff; }
+  .opt.pick { border-color: #2b7cff; background: #eaf2ff; }
+  .opt.right { border-color: #2e9e63; background: #eaf7ef; }
+  .opt.wrong { border-color: #d64545; background: #fdecec; }
+  .opt.dim { color: #9aa3af; }
+
+  .result { font-size: 15px; margin: 12px 0 6px; font-weight: bold; }
+  .result.ok { color: #2e9e63; }
+  .result.no { color: #d64545; }
+  .exp { font-size: 14px; line-height: 1.7; color: #55606e; background: #f7f9fc; border-radius: 8px; padding: 10px 12px; }
+
+  .foot { margin-top: 14px; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .foot button {
+    font-size: 15px; padding: 11px 18px; border: none; border-radius: 9px;
+    background: #2b7cff; color: #fff; cursor: pointer;
+  }
+  .foot button:hover { background: #1a66e0; }
+  .foot button.ghost { background: #e9ecf1; color: #555; }
+  .foot button.ghost:hover { background: #dde1e8; }
+
+  .stat { font-size: 13px; color: #6b7481; margin-top: 12px; line-height: 1.7; }
+  .done { font-size: 16px; line-height: 1.8; }
+
+  @media (max-width: 520px) {
+    body { padding: 12px; }
+    .qtext { font-size: 16px; }
+    .opt { font-size: 16px; }
+  }
+</style>
+</head>
+<body>
+
+<h1>初级消控 · 题库</h1>
+<p class="sub">
+  消防设施操作员五级/初级工（监控操作方向）自练习题。按《消防设施操作员国家职业标准》的模块编排：<br>
+  基础知识约 20%、设施监控操作约 35%、设施维护保养 20%、设施检测 20%。
+</p>
+
+<div class="chips" id="chips"></div>
+
+<div class="bar">
+  <button id="btnOrder" onclick="setMode('order')">顺序练</button>
+  <button id="btnRandom" onclick="setMode('random')">随机练</button>
+  <button onclick="practiceWrong()">只练错题</button>
+  <button onclick="resetAll()">清空记录</button>
+</div>
+
+<div class="card" id="card"></div>
+
+<p class="stat" id="stat"></p>
+
+<p class="sub" style="margin-top:18px">
+  说明：本页题库为按标准考点自编的练习，不是官方真题，也不代表考试原题；考试以官方教材、标准规范为准。
+  你的作答记录只存在本机浏览器里。
+</p>
+
+<script>
+// ============ 题库（考点按 2026 版《消防设施操作员》五级要求编排）============
+// m: 模块  t: judge 判断 / single 单选 / multi 多选
+// a: 判断题 true=正确；单选=正确选项下标；多选=正确下标数组
+const BANK = [
+  // ---------- 基础知识：消防工作 ----------
+  { m:"基础", t:"judge", q:"我国消防工作的方针是“预防为主、防消结合”。", a:true, e:"《消防法》规定：消防工作贯彻预防为主、防消结合的方针。" },
+  { m:"基础", t:"judge", q:"消防工作的原则是“政府统一领导、部门依法监管、单位全面负责、公民积极参与”。", a:true, e:"这是《消防法》确定的消防工作原则。" },
+  { m:"基础", t:"single", q:"某宾馆发生火灾，单位主要负责人应承担的责任是：", o:["只负责赔钱","本单位的消防安全责任人，全面负责本单位消防安全工作","由消防控制室值班员承担","与本人无关"], a:1, e:"单位的主要负责人是本单位的消防安全责任人，对本单位消防安全工作全面负责。" },
+  { m:"基础", t:"judge", q:"消防安全重点单位应当至少每半年进行一次灭火和应急疏散演练。", a:true, e:"重点单位每半年不少于一次；其他单位每年不少于一次。" },
+  { m:"基础", t:"judge", q:"任何单位和个人都有维护消防安全、保护消防设施、预防火灾、报告火警的义务。", a:true, e:"《消防法》第五条规定的公民义务。" },
+  { m:"基础", t:"single", q:"发现火灾后正确的处置顺序是：", o:["先救财物→再报警","先报警→再救火","确认火情→立即报警119→启动预案组织疏散→记录","等待领导指示"], a:2, e:"先确认、立即报警，同时按预案组织初期扑救和疏散，事后如实记录。" },
+  // ---------- 基础知识：燃烧与火灾 ----------
+  { m:"基础", t:"multi", q:"燃烧的必要条件包括：", o:["可燃物","助燃物（氧化剂）","引火源","未受抑制的链式反应"], a:[0,1,2,3], e:"现代燃烧理论把“未受抑制的链式反应自由基”作为第四个必要条件。" },
+  { m:"基础", t:"single", q:"可燃液体表面产生一闪即灭的燃烧现象的最低温度叫：", o:["闪点","燃点","自燃点","沸点"], a:0, e:"闪点越低，火灾危险性越大。" },
+  { m:"基础", t:"judge", q:"可燃物质在没有外部火源作用下，因自身发热而自行燃烧的现象叫自燃。", a:true, e:"自燃分为本身自燃和受热自燃。" },
+  { m:"基础", t:"single", q:"下列不属于灭火基本方法的是：", o:["冷却","窒息","隔离","加大通风助燃"], a:3, e:"灭火基本方法为冷却、窒息、隔离、化学抑制四种。" },
+  { m:"基础", t:"single", q:"按照国家标准火灾分为A、B、C、D、E、F类，汽油着火属于：", o:["A类固体火灾","B类液体或可熔化固体火灾","C类气体火灾","D类金属火灾"], a:1, e:"A类固体、B类液体、C类气体、D类金属、E类带电、F类烹饪油脂。" },
+  { m:"基础", t:"judge", q:"带电设备发生的火灾属于E类火灾。", a:true, e:"E类指带电物体燃烧的火灾，扑救前应尽可能切断电源。" },
+  { m:"基础", t:"single", q:"火灾发展一般分为初起、发展、猛烈、下降四个阶段，扑救最有利的阶段是：", o:["初起阶段","发展阶段","猛烈阶段","下降阶段"], a:0, e:"初起阶段燃烧面积小、火势弱，是扑救的最佳时机。" },
+  { m:"基础", t:"single", q:"火灾中造成人员死亡最主要的原因是：", o:["高温烧伤","烟气中的一氧化碳等有毒气体中毒窒息","建筑物倒塌","惊吓"], a:1, e:"火灾死亡多数因吸入有毒烟气窒息中毒，这也是要求防排烟、疏散的原因。" },
+  { m:"基础", t:"judge", q:"火灾时人员死亡大多数是直接被火烧死的。", a:false, e:"多数死于烟气中毒和窒息，所以逃生时要低姿、捂鼻、少吸入烟气。" },
+  // ---------- 基础知识：建筑与疏散 ----------
+  { m:"基础", t:"single", q:"我国建筑耐火等级共分为几级？", o:["二级","三级","四级","五级"], a:2, e:"分为一、二、三、四级，一级耐火性能最高。" },
+  { m:"基础", t:"judge", q:"建筑高度大于24m的非单层公共建筑属于高层建筑。", a:true, e:"公共建筑高度超过24m（不含单层）即为高层。" },
+  { m:"基础", t:"judge", q:"住宅建筑高度大于27m的属于高层住宅建筑。", a:true, e:"住宅以27m为界，超过即为高层住宅。" },
+  { m:"基础", t:"single", q:"消防车道的净宽度和净空高度均不应小于：", o:["2m","3m","4m","5m"], a:2, e:"《建筑防火通用规范》要求消防车道净宽、净空高度均不小于4m。" },
+  { m:"基础", t:"judge", q:"任何单位、个人不得占用、堵塞、封闭疏散通道和安全出口。", a:true, e:"这是《消防法》明确禁止的行为。" },
+  { m:"基础", t:"multi", q:"下列属于安全疏散设施的有：", o:["疏散楼梯","安全出口","疏散走道","消防应急照明和疏散指示标志"], a:[0,1,2,3], e:"以上都是保证人员安全疏散的设施。" },
+  { m:"基础", t:"single", q:"灯光疏散指示标志沿疏散走道设置的间距一般不应大于：", o:["10m","20m","30m","50m"], a:1, e:"一般不大于20m，袋形走道不大于10m。" },
+  { m:"基础", t:"judge", q:"疏散楼梯间可以用卷帘门代替疏散门。", a:false, e:"疏散楼梯间、安全出口必须设向疏散方向开启的疏散门，不能用卷帘门代替。" },
+  // ---------- 基础知识：消防控制室 ----------
+  { m:"基础", t:"single", q:"消防控制室实行每日24小时值班，每班值班人员不应少于：", o:["1人","2人","3人","4人"], a:1, e:"GB 25506 要求每日24h值班，每班不少于2人。" },
+  { m:"基础", t:"judge", q:"消防控制室值班人员应当持证上岗。", a:true, e:"消防控制室值班操作人员应持有相应职业资格证书。" },
+  { m:"基础", t:"single", q:"附设在建筑内的消防控制室，宜设置在：", o:["建筑顶层","首层或地下一层，且宜靠外墙部位","任意楼层","楼梯间内"], a:1, e:"便于消防人员到达和直通室外，且耐火等级不低于二级。" },
+  { m:"基础", t:"judge", q:"消防控制室内可以存放杂物，只要不影响设备操作就行。", a:false, e:"消防控制室严禁存放与消防无关的物品，应保持整洁、通道畅通。" },
+  { m:"基础", t:"judge", q:"消防控制室应有直通室外的安全出口或通道，并设有消防专用电话。", a:true, e:"便于与消防队联络和人员进出。" },
+  { m:"基础", t:"single", q:"消防控制室值班人员交接班时应当：", o:["口头说一句就走","检查系统运行状态、核对记录、交接未处理事项","只看时间","直接关机"], a:1, e:"交接班要交接系统状态、报警故障处理情况和未完成事项。" },
+  { m:"基础", t:"judge", q:"消防控制室的火灾报警控制器应处于自动允许状态，除非因维修等原因需要暂时置于手动。", a:true, e:"正常情况下应处于自动状态，手动状态须经批准并有防范措施。" },
+
+  // ---------- 设施监控操作：火灾自动报警 ----------
+  { m:"监控", t:"judge", q:"火灾自动报警系统由触发装置、火灾报警装置、联动控制装置和电源等部分组成。", a:true, e:"这是系统的四大基本组成部分。" },
+  { m:"监控", t:"single", q:"感烟火灾探测器最适合安装在：", o:["有大量粉尘的车间","可能产生阴燃、火灾初期有烟雾的场所","厨房灶台上方","汽车喷漆房"], a:1, e:"粉尘、水雾场所易误报，不宜用感烟探测器。" },
+  { m:"监控", t:"judge", q:"感温火灾探测器适用于经常有烟雾滞留、但温度变化不明显的场所。", a:true, e:"如厨房、锅炉房等，感烟易误报时可选感温。" },
+  { m:"监控", t:"single", q:"手动火灾报警按钮的安装高度一般距地面：", o:["0.8~1.0m","1.3~1.5m","1.8~2.0m","2.2~2.5m"], a:1, e:"1.3~1.5m，便于人员操作。" },
+  { m:"监控", t:"judge", q:"每个防火分区应至少设置一只手动火灾报警按钮。", a:true, e:"且从一个防火分区内的任何位置到最近按钮的步行距离不应大于30m。" },
+  { m:"监控", t:"single", q:"火灾报警控制器“消音”键的作用是：", o:["消除火警信息","只停止声响，不改变报警状态","复位系统","关闭电源"], a:1, e:"消音仅是静音，报警信息仍保留在屏幕上。" },
+  { m:"监控", t:"judge", q:"火灾报警控制器“复位”前应先确认火情已处理，否则会清掉报警信息。", a:true, e:"复位会使系统恢复到监视状态，报警、故障显示清零。" },
+  { m:"监控", t:"single", q:"火灾报警控制器的主电源应使用：", o:["普通照明插座","消防电源专用回路","蓄电池","应急发电机"], a:1, e:"主电应为消防电源，备用电源为蓄电池，主电断电自动切换。" },
+  { m:"监控", t:"judge", q:"火灾报警控制器主电断电后，备用蓄电池应能自动投入供电。", a:true, e:"主备电源自动切换是基本功能，值班时应检查电源状态。" },
+  { m:"监控", t:"single", q:"火灾报警控制器处于“自动”状态时，接收到火警信号后会：", o:["只报警不动作","按预设逻辑自动启动相关消防联动设备","自动关机","自动屏蔽设备"], a:1, e:"这就是“自动允许”的含义。" },
+  { m:"监控", t:"judge", q:"消防联动控制器处于“手动”状态时，火灾报警后联动设备不会自动启动，需人工确认后手动操作。", a:true, e:"手动状态便于避免误动作，但必须有人员值守及时操作。" },
+  { m:"监控", t:"single", q:"控制器显示“屏蔽”状态，说明：", o:["系统正常","有设备或部位被隔离，不参与报警","主电故障","通信中断"], a:1, e:"屏蔽通常是维修、误报处理时的临时措施，应尽快恢复。" },
+  { m:"监控", t:"judge", q:"监管报警是指系统收到的、不属于火灾报警的其他异常信号，例如水流指示器动作、信号阀关闭、防火阀关闭等。", a:true, e:"监管报警也要查明原因并处理。" },
+  { m:"监控", t:"single", q:"查询火灾报警控制器的历史记录，主要作用是：", o:["清空系统","了解过去发生的报警、故障和操作情况","修改系统时间","屏蔽设备"], a:1, e:"这也是消防检查常查的内容。" },
+  { m:"监控", t:"judge", q:"火灾报警控制器的“自检”功能用于检查面板指示灯、音响器等工作是否正常。", a:true, e:"每天交接班常做一次自检。" },
+  { m:"监控", t:"single", q:"下列设备中，不能通过总线控制盘直接启动的是：", o:["火灾警报装置","加压送风口","电动机消防泵组（消防水泵）","排烟阀"], a:2, e:"消防水泵、排烟风机等重要设备由直接手动控制单元（多线盘）直接启动。" },
+  { m:"监控", t:"judge", q:"消防联动控制器的直接手动控制单元可以在总线故障时直接启动消防水泵、排烟风机等重要设备。", a:true, e:"多线控制采用独立线路，可靠性更高。" },
+  { m:"监控", t:"single", q:"火灾时“迫降所有电梯”的操作通常由哪台设备完成？", o:["火灾报警控制器","消防联动控制器","应急照明控制器","图形显示装置"], a:1, e:"属于消防联动控制器的联动控制内容。" },
+  { m:"监控", t:"judge", q:"消防控制室图形显示装置可以显示建筑平面、设备位置和报警部位。", a:true, e:"图形显示装置用于快速定位报警点。" },
+  { m:"监控", t:"single", q:"接到火灾报警信号后，值班人员首先应：", o:["立即启动全部联动设备","通知现场人员（或调监控）确认火情","直接拨打119","先填写记录"], a:1, e:"先确认，避免误报造成恐慌和大面积联动。" },
+  { m:"监控", t:"judge", q:"确认为误报后，应查明误报原因、排除故障，然后对系统复位。", a:true, e:"并记录误报情况，属于设备问题的应报修。" },
+  { m:"监控", t:"single", q:"火灾确认后，值班人员应当：", o:["立即切断建筑全部电源","拨打119报警，同时启动灭火和应急疏散预案、开启应急广播","等领导到场","关闭消防设施"], a:1, e:"同时向单位负责人报告，并在能力范围内进行初期处置。" },
+  { m:"监控", t:"judge", q:"“建筑消防设施巡查记录表”应如实记录巡查发现的问题，不得只写“正常”。", a:true, e:"发现问题要记录并及时处理、报修。" },
+  { m:"监控", t:"single", q:"填写“消防控制室值班记录表”时，下列做法正确的是：", o:["事后统一补记","每班如实填写报警、故障、处置和交接情况","只写交接人姓名","由下一班代写"], a:1, e:"值班记录要真实、及时、完整。" },
+  { m:"监控", t:"judge", q:"消防控制室的图形显示装置、火灾报警控制器时间应与实际时间一致。", a:true, e:"时间不一致会影响报警记录追溯，应定期校时。" },
+
+  // ---------- 设施监控操作：自动喷水灭火 ----------
+  { m:"监控", t:"single", q:"湿式自动喷水灭火系统适用于环境温度：", o:["低于4℃的场所","4℃~70℃的场所","高于70℃的场所","有爆炸危险的场所"], a:1, e:"湿式管道内长期充水，温度过低会冻结、过高易汽化。" },
+  { m:"监控", t:"judge", q:"干式系统管道内平时充有有压气体，适用于环境温度低于4℃或高于70℃的场所。", a:true, e:"喷头动作后先排气、再充水，动作稍有延迟。" },
+  { m:"监控", t:"single", q:"湿式报警阀组上的水力警铃，其作用是：", o:["发出报警声响","减压","过滤杂质","排气"], a:0, e:"水力警铃由水流驱动发声，是就地报警装置。" },
+  { m:"监控", t:"judge", q:"末端试水装置用于检验系统供水压力、水流指示器和报警阀动作是否正常。", a:true, e:"每月应试验一次并记录压力值。" },
+  { m:"监控", t:"single", q:"自动喷水灭火系统最不利点处喷头的工作压力不应低于：", o:["0.01MPa","0.05MPa","0.1MPa","0.5MPa"], a:1, e:"低于0.05MPa时喷水强度不足。" },
+  { m:"监控", t:"judge", q:"常见红色玻璃球洒水喷头的动作温度为68℃。", a:true, e:"不同颜色代表不同动作温度，红色最常见。" },
+  { m:"监控", t:"single", q:"水流指示器的作用是：", o:["报警并指示动作的防火分区","减压","排气","控制水流方向"], a:0, e:"喷头动作后水流推动叶片动作，向控制室发出监管信号。" },
+  { m:"监控", t:"judge", q:"报警阀组的信号阀正常应处于常开状态，关闭时应能向消防控制室反馈信号。", a:true, e:"信号阀被误关会导致系统失效，所以要有监视。" },
+  { m:"监控", t:"multi", q:"湿式自动喷水灭火系统的主要组成包括：", o:["报警阀组","水流指示器","压力开关","水力警铃"], a:[0,1,2,3], e:"还有闭式喷头、管道、供水设施等。" },
+  { m:"监控", t:"judge", q:"喷头被油漆、灰尘覆盖或吊顶遮挡，会影响喷水效果，应及时清理或更换。", a:true, e:"喷头不得涂漆、不得被遮挡。" },
+
+  // ---------- 设施监控操作：其他设施 ----------
+  { m:"监控", t:"single", q:"室内消火栓栓口中心距地面的高度一般为：", o:["0.8m","1.1m","1.4m","1.6m"], a:1, e:"栓口中心距地面1.1m，便于连接和使用。" },
+  { m:"监控", t:"judge", q:"室内消火栓箱内应配有水枪、水带，水带长度一般为20m或25m。", a:true, e:"还应配有消火栓按钮（可直接启泵并报警）。" },
+  { m:"监控", t:"single", q:"使用室内消火栓灭火，正确做法是：", o:["先开阀门再接水带","先接好水带、水枪，两人配合再开启阀门","一人操作即可","对着火焰上部喷射"], a:1, e:"两人配合、先接后开，防止水带甩动伤人；水枪对准火焰根部。" },
+  { m:"监控", t:"judge", q:"消防软管卷盘可以单人操作，适合扑救初起火灾。", a:true, e:"卷盘管径小、出水快，用于初期小火。" },
+  { m:"监控", t:"single", q:"手提式ABC干粉灭火器适用于：", o:["只能灭固体火灾","固体、液体、气体及带电设备的初起火灾","只能灭气体火灾","只能灭金属火灾"], a:1, e:"ABC干粉适用面广，是场所常备灭火器。" },
+  { m:"监控", t:"judge", q:"二氧化碳灭火器适用于电子设备、精密仪器等场所的初起火灾。", a:true, e:"灭火后不留残渣，但要注意冻伤和密闭空间窒息风险。" },
+  { m:"监控", t:"single", q:"灭火器压力表指针指在绿区，说明：", o:["压力不足，需充装","压力正常，可正常使用","压力过高，有爆炸危险","灭火器已报废"], a:1, e:"红区压力不足、黄区压力过高，都要处理。" },
+  { m:"监控", t:"judge", q:"灭火器应每月检查一次压力、外观、铅封、喷管喷嘴等是否完好。", a:true, e:"检查记录应留档，超期或损坏的及时维修更换。" },
+  { m:"监控", t:"single", q:"使用手提式灭火器时，喷嘴应对准：", o:["火焰上部","火焰中部","火焰根部","烟雾处"], a:2, e:"对准根部左右扫射，才能切断燃烧。" },
+  { m:"监控", t:"judge", q:"灭火器应放在明显、便于取用的位置，不得被遮挡或锁在柜内。", a:true, e:"否则紧急时取不到，等于没有。" },
+  { m:"监控", t:"multi", q:"判断灭火器是否有效，应检查：", o:["压力表指针是否在绿区","筒体有无锈蚀、变形","喷管、喷嘴是否完好畅通","铅封是否完好、是否在有效期内"], a:[0,1,2,3], e:"任一项不合格都应维修或更换。" },
+  { m:"监控", t:"single", q:"消防自救呼吸器（逃生面罩）的主要作用是：", o:["灭火","过滤有毒烟气，帮助人员逃生","发出报警","提供照明"], a:1, e:"有效期内使用，佩戴前先拔掉内外两个密封塞。" },
+  { m:"监控", t:"judge", q:"消防电梯在火灾时应迫降至首层，供消防人员使用，普通人员不应乘坐。", a:true, e:"普通电梯火灾时可能断电困人，且易成为烟气通道。" },
+  { m:"监控", t:"multi", q:"火灾时不能乘坐普通电梯的原因包括：", o:["可能断电被困","电梯井可能成为烟气通道","电梯可能已按消防信号迫降停用","电梯运行速度太快"], a:[0,1,2], e:"所以疏散要走疏散楼梯。" },
+  { m:"监控", t:"single", q:"安装在楼梯间、前室，火灾时向里送风的是：", o:["排烟口","加压送风口","补风口","回风口"], a:1, e:"加压送风使楼梯间、前室保持正压，防止烟气进入。" },
+  { m:"监控", t:"judge", q:"排烟防火阀在烟气温度达到280℃时自动关闭，防止火势蔓延。", a:true, e:"280℃是排烟系统的动作温度。" },
+  { m:"监控", t:"single", q:"常开式防火门在火灾时应：", o:["保持开启","自动关闭，并向消防控制室反馈关闭信号","由人手动拆除","断电"], a:1, e:"常开防火门由释放器控制，火灾时自动关闭。" },
+  { m:"监控", t:"judge", q:"常闭防火门平时应保持关闭状态，不得用物品卡住使其常开。", a:true, e:"常闭门被卡开是常见隐患。" },
+  { m:"监控", t:"single", q:"消防水泵吸水管、出水管上的阀门，正常应处于：", o:["关闭状态","开启状态","半开状态","任意状态"], a:1, e:"阀门被误关是消防泵打不上水的常见原因，值班要检查。" },
+  { m:"监控", t:"judge", q:"可通过消防水池（水箱）的液位显示装置查看水位，水位过低应及时补水。", a:true, e:"水位不足会直接影响灭火用水量。" },
+  { m:"监控", t:"single", q:"消防专用电话的主要用途是：", o:["日常办公通话","火灾时消防控制室与现场、消防队之间的专用通信","播放背景音乐","替代应急广播"], a:1, e:"消防电话是独立的自有线路，可靠性高。" },
+  { m:"监控", t:"judge", q:"消防应急广播可用话筒手动播音，火灾时引导人员疏散。", a:true, e:"也可由联动信号自动启动，播放预先录制的疏散指令。" },
+  { m:"监控", t:"single", q:"应急照明控制器的“一键启动”按钮作用是：", o:["关闭全部应急灯","使系统内应急照明灯具全部转入应急点亮状态","启动自检","复位报警"], a:1, e:"火灾确认后使用，保证疏散照明。" },
+  { m:"监控", t:"judge", q:"防火卷帘分两步下降：感烟探测器报警后降至距地面1.8m，感温探测器报警后降至地面。", a:true, e:"第一步用于隔烟并便于人员疏散，第二步完全关闭。" },
+  { m:"监控", t:"single", q:"消防水泵控制柜处于“自动”状态时，接到启泵信号会：", o:["不动作","自动启动消防泵","报警但不启动","锁定"], a:1, e:"平时应置于自动，检修时才允许手动。" },
+  { m:"监控", t:"judge", q:"消防水泵应能在现场手动启动，也能在机械应急情况下强制启动。", a:true, e:"机械应急启动是不依赖电气控制的最后手段。" },
+
+  // ---------- 设施维护保养 ----------
+  { m:"维护", t:"single", q:"清洁火灾报警控制器外表时，正确做法是：", o:["用水冲洗","用干布或微湿布擦拭，禁止用水冲洗内部","用汽油擦","拆开用酒精喷电路板"], a:1, e:"进水会导致短路和误报。" },
+  { m:"维护", t:"judge", q:"火灾报警控制器的备用蓄电池应定期充放电维护，失效的应及时更换。", a:true, e:"否则主电断电后系统无法工作。" },
+  { m:"维护", t:"single", q:"更换火灾报警控制器打印纸时应注意：", o:["带电拆机随便塞","按操作说明更换，不要触碰内部电路","用湿手操作","不必理会方向"], a:1, e:"避免静电和误碰造成故障。" },
+  { m:"维护", t:"judge", q:"对自动灭火系统组件进行机械润滑时，应使用规定润滑剂，不得污染水质、不得堵塞喷头。", a:true, e:"润滑部位主要是阀门传动机构等。" },
+  { m:"维护", t:"single", q:"清洁自动喷水灭火系统组件时，下列做法错误的是：", o:["擦拭报警阀组外表灰尘","清理喷头周围遮挡物","用油漆把喷头刷成统一颜色","检查信号阀是否常开"], a:2, e:"喷头严禁涂漆、不得被遮挡或损坏。" },
+  { m:"维护", t:"judge", q:"消防设施维护保养应填写记录，发现故障及时报修，不能只做不记。", a:true, e:"记录是检查和追责的依据。" },
+  { m:"维护", t:"single", q:"湿式报警阀组定期试验的主要内容是：", o:["只测量压力","试验水力警铃、压力开关动作及阀瓣密封情况","只擦灰尘","只换水"], a:1, e:"通过末端试水或试验阀进行。" },
+  { m:"维护", t:"judge", q:"消防水箱、水池应定期检查水位、浮球阀和液位显示装置是否正常。", a:true, e:"水位异常要及时补水并查明原因。" },
+  { m:"维护", t:"single", q:"消防水泵定期试运行的目的是：", o:["浪费电","检查泵组能否正常启动、运转和供水","降低水池水位","测试停电"], a:1, e:"还应检查阀门状态、有无异响和渗漏。" },
+  { m:"维护", t:"judge", q:"消防设施维护保养可以由未经培训的人员随意进行。", a:false, e:"应由具备相应能力的人员按规程进行。" },
+  { m:"维护", t:"single", q:"探测器被灰尘污染导致频繁误报，正确处理是：", o:["长期屏蔽不管","清洁或更换探测器，并查明污染原因","直接拆除","调高灵敏度"], a:1, e:"屏蔽只是临时措施，不能长期屏蔽。" },
+  { m:"维护", t:"judge", q:"消防设施因维修需要暂时停用，应经消防安全责任人批准，采取防范措施并做好记录。", a:true, e:"停用期间要加强巡查和临时防护。" },
+  { m:"维护", t:"single", q:"消防控制室内的设备、线路应保持整洁，下列做法正确的是：", o:["在设备上堆放杂物","保持设备清洁、线路规整、标识清楚","私自接线加装设备","用湿布擦拭通电设备内部"], a:1, e:"设备标识清楚才便于应急处置。" },
+  { m:"维护", t:"judge", q:"消防设施上的标识、标牌不得随意拆除或遮挡。", a:true, e:"标识是操作和检查的依据。" },
+  { m:"维护", t:"multi", q:"消防设施日常巡查的主要内容一般包括：", o:["设施外观是否完好、有无遮挡","阀门启闭状态是否正确","有无渗漏、异响","标识是否清晰、记录是否填写"], a:[0,1,2,3], e:"巡查发现问题要记录、处理、上报。" },
+
+  // ---------- 设施检测 ----------
+  { m:"检测", t:"single", q:"测试点型感烟火灾探测器常用方法是：", o:["用加烟试验器向探测器加烟","用热水浇","用力敲击","直接拆下"], a:0, e:"加烟后控制器应显示该部位火警。" },
+  { m:"检测", t:"judge", q:"测试点型感温火灾探测器可用热风机加热至动作温度，观察是否报警。", a:true, e:"加热要均匀，避免烤坏探测器。" },
+  { m:"检测", t:"single", q:"按下手动火灾报警按钮后，正常现象是：", o:["没有任何反应","按钮指示灯点亮，控制器显示对应部位火警","直接喷水","系统断电"], a:1, e:"测试后要复位按钮和控制器。" },
+  { m:"检测", t:"judge", q:"测试水力警铃时应在3m处测量声压级，不应小于70dB。", a:true, e:"声音过小说明供水压力不足或警铃故障。" },
+  { m:"检测", t:"single", q:"测量室内消火栓静水压力应使用：", o:["压力表","温度计","万用表","卷尺"], a:0, e:"接在栓口上读取静压，判断供水是否达标。" },
+  { m:"检测", t:"judge", q:"测试消防应急广播时，扬声器声压级应高于背景噪声15dB（背景噪声大于60dB的场所）。", a:true, e:"否则疏散指令听不清。" },
+  { m:"检测", t:"single", q:"测试消防专用电话功能时，应：", o:["只拨号不讲话","在消防控制室与各分机、插孔电话通话，检查清晰度","只听铃声","不需要测试"], a:1, e:"逐点测试并记录通话质量。" },
+  { m:"检测", t:"judge", q:"测试应急照明控制器应急启动功能时，灯具应能转入应急状态并达到规定照度。", a:true, e:"还应检查应急持续时间是否满足要求。" },
+  { m:"检测", t:"single", q:"火灾显示盘需要测试的功能包括：", o:["火灾报警、故障报警、消音、复位","只显示时间","只报火警","只自检"], a:0, e:"火灾显示盘设在楼层，便于就地查看报警部位。" },
+  { m:"检测", t:"judge", q:"测试消防水泵控制柜启/停功能时，应检查手动、自动启泵及反馈信号是否正常。", a:true, e:"同时观察压力、流量是否达到设计值。" },
+  { m:"检测", t:"single", q:"检测火灾自动报警系统接地电阻应使用：", o:["万用表","接地电阻测试仪","压力表","卷尺"], a:1, e:"接地电阻过大易造成干扰和误动作。" },
+  { m:"检测", t:"judge", q:"检测消防设施前应了解系统结构、做好安全防护，避免误动作影响场所正常使用。", a:true, e:"必要时应提前通知相关单位和人员。" },
+  { m:"检测", t:"multi", q:"火灾自动报警系统的基本组成部分包括：", o:["触发装置（探测器、手动按钮）","火灾报警装置（控制器）","联动控制装置","电源"], a:[0,1,2,3], e:"四部分缺一不可。" },
+  { m:"检测", t:"single", q:"点型感烟探测器报警后，控制器应显示：", o:["该探测器的部位和编号","只显示“火警”","只响铃","不显示"], a:0, e:"报警部位要能与图形显示装置对应，便于快速核查。" }
+];
+
+// ============ 页面逻辑 ============
+const WRONG_KEY = "tikuWrong";
+let wrongSet = new Set(JSON.parse(localStorage.getItem(WRONG_KEY) || "[]"));
+let moduleFilter = "全部";   // 全部 / 基础 / 监控 / 维护 / 检测
+let mode = "order";          // order / random
+let list = [];               // 本次要练的题（对象数组）
+let idx = 0;                 // 当前第几题
+let answered = false;        // 当前题是否已答
+let picks = [];              // 多选题已选项
+let rightCount = 0, doneCount = 0;
+
+const MODULES = ["全部", "基础", "监控", "维护", "检测"];
+const MODULE_NAME = { "基础":"基础知识", "监控":"设施监控操作", "维护":"设施维护保养", "检测":"设施检测" };
+
+function optionText(q) {
+  if (q.t === "judge") { return ["正确", "错误"]; }
+  return q.o;
+}
+function isRight(q, chosen) {
+  if (q.t === "judge") { return (q.a ? 0 : 1) === chosen[0]; }
+  if (q.t === "single") { return q.a === chosen[0]; }
+  const need = q.a.slice().sort().join(",");
+  const got = chosen.slice().sort().join(",");
+  return need === got;
+}
+function rightAnswerText(q) {
+  if (q.t === "judge") { return q.a ? "正确" : "错误"; }
+  if (q.t === "single") { return q.o[q.a]; }
+  return q.a.map(function (i) { return q.o[i]; }).join("、");
+}
+
+function buildChips() {
+  const box = document.getElementById("chips");
+  box.innerHTML = "";
+  MODULES.forEach(function (m) {
+    const b = document.createElement("button");
+    b.className = "chip" + (m === moduleFilter ? " on" : "");
+    const n = m === "全部" ? BANK.length : BANK.filter(function (q) { return q.m === m; }).length;
+    b.textContent = (m === "全部" ? "全部" : MODULE_NAME[m]) + "(" + n + ")";
+    b.onclick = function () { moduleFilter = m; buildChips(); start(); };
+    box.appendChild(b);
+  });
+}
+
+function shuffle(arr) {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    const t = a[i]; a[i] = a[j]; a[j] = t;
+  }
+  return a;
+}
+
+function start() {
+  let pool = BANK.filter(function (q) { return moduleFilter === "全部" || q.m === moduleFilter; });
+  if (mode === "random") { pool = shuffle(pool); }
+  list = pool;
+  idx = 0; rightCount = 0; doneCount = 0;
+  show();
+}
+
+function setMode(m) {
+  mode = m;
+  document.getElementById("btnOrder").style.background = (m === "order" ? "#2b7cff" : "");
+  document.getElementById("btnOrder").style.color = (m === "order" ? "#fff" : "");
+  document.getElementById("btnRandom").style.background = (m === "random" ? "#2b7cff" : "");
+  document.getElementById("btnRandom").style.color = (m === "random" ? "#fff" : "");
+  start();
+}
+
+function practiceWrong() {
+  const pool = BANK.filter(function (q, i) { return wrongSet.has(i); });
+  if (pool.length === 0) { alert("目前没有错题，先练一遍再来。"); return; }
+  list = mode === "random" ? shuffle(pool) : pool;
+  idx = 0; rightCount = 0; doneCount = 0;
+  show();
+}
+
+function resetAll() {
+  if (!confirm("清空错题本和本页作答统计？")) { return; }
+  wrongSet = new Set();
+  localStorage.removeItem(WRONG_KEY);
+  start();
+}
+
+function show() {
+  const card = document.getElementById("card");
+  answered = false;
+  picks = [];
+
+  if (list.length === 0) {
+    card.innerHTML = "<p class='done'>这个模块暂时没有题目。</p>";
+    updateStat();
+    return;
+  }
+  if (idx >= list.length) {
+    const rate = doneCount === 0 ? 0 : Math.round(rightCount / doneCount * 100);
+    card.innerHTML = "<p class='done'>练完了这一轮：共 " + doneCount + " 题，答对 " +
+      rightCount + " 题，正确率 " + rate + "%。<br>错题已自动记下，可以点「只练错题」再来一遍。</p>";
+    updateStat();
+    return;
+  }
+
+  const q = list[idx];
+  const opts = optionText(q);
+  const typeName = q.t === "judge" ? "判断题" : (q.t === "single" ? "单选题" : "多选题");
+
+  let html = "<div class='meta'><span class='tag'>" + (MODULE_NAME[q.m] || "综合") +
+    "</span><span class='tag type'>" + typeName + "</span><span>第 " + (idx + 1) + " / " + list.length + " 题</span></div>";
+  html += "<p class='qtext'>" + escapeHtml(q.q) + "</p>";
+  html += "<div id='opts'>";
+  opts.forEach(function (o, i) {
+    html += "<button class='opt' data-i='" + i + "' onclick='pick(" + i + ")'>" +
+      (q.t === "multi" ? "（可多选）" : "") + escapeHtml(o) + "</button>";
+  });
+  html += "</div>";
+  html += "<div id='feedback'></div>";
+  html += "<div class='foot' id='foot'></div>";
+  card.innerHTML = html;
+  renderFoot();
+  updateStat();
+}
+
+function renderFoot() {
+  const q = list[idx];
+  let html = "";
+  if (q.t === "multi" && !answered) {
+    html = "<button onclick='submitMulti()'>提交答案</button>";
+  }
+  if (answered) {
+    html += "<button onclick='nextQ()'>下一题</button>";
+  }
+  html += "<button class='ghost' onclick='skipQ()'>跳过</button>";
+  document.getElementById("foot").innerHTML = html;
+}
+
+function pick(i) {
+  if (answered) { return; }
+  const q = list[idx];
+  const btns = document.querySelectorAll("#opts .opt");
+
+  if (q.t === "multi") {
+    const pos = picks.indexOf(i);
+    if (pos >= 0) { picks.splice(pos, 1); } else { picks.push(i); }
+    btns.forEach(function (b, k) { b.className = "opt" + (picks.indexOf(k) >= 0 ? " pick" : ""); });
+    return;
+  }
+
+  picks = [i];
+  judge();
+}
+
+function submitMulti() {
+  if (picks.length === 0) { alert("先选择答案再提交。"); return; }
+  judge();
+}
+
+function judge() {
+  const q = list[idx];
+  const btns = document.querySelectorAll("#opts .opt");
+  const ok = isRight(q, picks);
+  answered = true;
+  doneCount++;
+  if (ok) { rightCount++; } else { wrongSet.add(BANK.indexOf(q)); }
+
+  const rightIdx = q.t === "judge" ? [(q.a ? 0 : 1)] : (q.t === "single" ? [q.a] : q.a);
+  btns.forEach(function (b, k) {
+    b.className = "opt";
+    if (rightIdx.indexOf(k) >= 0) { b.className = "opt right"; }
+    else if (picks.indexOf(k) >= 0) { b.className = "opt wrong"; }
+            else { b.className = "opt dim"; }
+    b.onclick = null;
+  });
+
+  const fb = document.getElementById("feedback");
+  fb.innerHTML = "<p class='result " + (ok ? "ok" : "no") + "'>" +
+    (ok ? "✅ 答对了" : "❌ 答错了") +
+    (ok ? "" : "，正确答案是：" + escapeHtml(rightAnswerText(q))) +
+    "</p><p class='exp'>" + escapeHtml(q.e || "") + "</p>";
+  localStorage.setItem(WRONG_KEY, JSON.stringify(Array.from(wrongSet)));
+  renderFoot();
+  updateStat();
+}
+
+function nextQ() {
+  idx++;
+  show();
+}
+
+function skipQ() {
+  idx++;
+  show();
+}
+
+function updateStat() {
+  const rate = doneCount === 0 ? 0 : Math.round(rightCount / doneCount * 100);
+  document.getElementById("stat").innerHTML =
+    "本轮已答 " + doneCount + " 题，答对 " + rightCount + " 题，正确率 " + rate + "%　｜　错题本：" + wrongSet.size + " 题";
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// 启动
+buildChips();
+setMode("order");
+</script>
+
+</body>
+</html>
