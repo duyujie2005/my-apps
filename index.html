@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="软件柜">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <title>杜裕杰的软件柜</title>
+<script src="auth.js" data-guard="1"></script>
 <style>
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   body {
@@ -112,13 +113,13 @@
     <img class="logo" src="icon-192.png" alt="软件柜">
     <div>
       <h1>杜裕杰的软件柜</h1>
-      <div class="sm">4 个应用 · 断网也能打开</div>
+      <div class="sm">6 个应用 · 断网也能打开</div>
     </div>
     <div class="state" id="state">在线</div>
   </div>
   <div class="search">
     <span class="ic">🔍</span>
-    <input id="q" placeholder="搜一下：题库 / 记账 / 地鼠 / 反射弧" autocomplete="off">
+    <input id="q" placeholder="搜一下：消控 / 会计 / 保安 / 记账 / 游戏" autocomplete="off">
   </div>
 </header>
 
@@ -132,8 +133,14 @@
 
 <script>
   const APPS = [
+    { id: "kuaiji", name: "初级会计题库", icon: "📊", cls: "b", href: "kuaiji.html",
+      desc: "初级会计实务 + 经济法基础 · 210 题 · 做对不再重刷", sec: "学习备考",
+      tags: [["hot", "210 题"], ["off", "离线可用"], ["", "错题本"]] },
+    { id: "baoan", name: "国家保安员题库", icon: "🛡️", cls: "c", href: "baoan.html",
+      desc: "法律法规 + 保安业务 + 应急处置 · 197 题", sec: "学习备考",
+      tags: [["hot", "197 题"], ["off", "离线可用"], ["", "错题本"]] },
     { id: "tiku", name: "初级消控题库", icon: "🎫", cls: "a", href: "tiku.html",
-      desc: "消防设施操作员五级 · 419 道题 · 答对自动跳题", sec: "学习备考",
+      desc: "消防设施操作员五级 · 419 题 · 做对不再重刷", sec: "学习备考",
       tags: [["hot", "419 题"], ["off", "离线可用"], ["", "错题本"]] },
     { id: "jizhangben", name: "记账本", icon: "💰", cls: "b", href: "jizhangben.html",
       desc: "邮箱登录 · 账目存云端 · 多设备同一份", sec: "效率工具",
