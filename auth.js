@@ -41,19 +41,37 @@
     if (!me) { return; }
     var el = document.createElement("div");
     el.style.cssText = "position:fixed;right:12px;top:10px;z-index:20;font-size:12px;color:#6b7481;" +
-      "background:#fff;border:1px solid #e3e7ee;border-radius:16px;padding:5px 10px;box-shadow:0 2px 8px #0000000f;";
-    var name = me.email.split("@")[0];
-    el.innerHTML = "👤 " + name + ' <span style="color:#8a929e">· 检测中…</span> <a href="javascript:void 0" style="color:#2b7cff;text-decoration:none;margin-left:6px">退出</a>';
-    el.querySelector("a").onclick = function () { logout(); };
+      "background:#fff;border:1px solid #e3e7ee;border-radius:16px;padding:5px 10px;box-shadow:0 2px 8px #0000000f;" +
+      "display:flex;align-items:center;gap:6px;";
+    var av = document.createElement("span");
+    av.textContent = "👤";
+    av.style.cssText = "font-size:16px;line-height:1;";
+    var nm = document.createElement("a");
+    nm.href = "me.html";
+    nm.title = "点这里设置头像和名字";
+    nm.textContent = me.email.split("@")[0];
+    nm.style.cssText = "color:#2b7cff;text-decoration:none;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;";
+    var tag = document.createElement("span");
+    tag.textContent = "· 检测中…";
+    tag.style.color = "#8a929e";
+    var out = document.createElement("a");
+    out.href = "javascript:void 0";
+    out.textContent = "退出";
+    out.style.cssText = "color:#2b7cff;text-decoration:none;margin-left:4px;";
+    out.onclick = function () { logout(); };
+    el.appendChild(av); el.appendChild(nm); el.appendChild(tag); el.appendChild(out);
     document.body.appendChild(el);
 
     // 显示"记录是否已跟账号同步"，让人一眼看得出来
     if (window.SYNC) {
       window.SYNC.online().then(function (ok) {
-        var tag = el.querySelector("span");
-        if (!tag) { return; }
         tag.textContent = ok ? "· ☁️已同步" : "· 仅本机";
         tag.style.color = ok ? "#2e9e63" : "#c8862a";
+      }).catch(function () {});
+      window.SYNC.profile().then(function (p) {
+        if (!p) { return; }
+        av.textContent = p.avatar || "👤";
+        nm.textContent = p.nick || nm.textContent;
       }).catch(function () {});
     }
   }
@@ -89,6 +107,16 @@
 // 依赖 supabase.js；没加载就动态补上。没登录或不联网时自动退回本机存储。
 (function () {
   var URL_ = "https://jrykjjhxfxdkntenilyd.supabase.co";
+  function randCode() {
+    var s = "";
+    for (var i = 0; i < 6; i++) { s += Math.floor(Math.random() * 10); }
+    return s;
+  }
+  function sha256(text) {
+    return crypto.subtle.digest("SHA-256", new TextEncoder().encode(text)).then(function (buf) {
+      return Array.from(new Uint8Array(buf)).map(function (x) { return x.toString(16).padStart(2, "0"); }).join("");
+    });
+  }
   var KEY_ = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpyeWtqamh4Znhka250ZW5pbHlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTU0MjUyMTcsImV4cCI6MjExMTAwMTIxN30.eEW940nO8CqJz6HB_4fZvPbbr4S10O5yhBLdXrLAZAg";
   var readyP = null;
 
@@ -192,6 +220,93 @@
             return out;
           });
       }).catch(function () { return []; });
+    },
+    // ---------- 头像 + 昵称 ----------
+    // 取我的资料（昵称/头像/好友码）；force=true 时强制从云端刷新
+    profile: function (force) {
+      var c = null;
+      try { c = JSON.parse(localStorage.getItem("byProfile") || "null"); } catch (e) { c = null; }
+      if (c && !force) { return Promise.resolve(c); }
+      return withSession(function (sb, se) {
+        return sb.from("profiles").select("id,nick,avatar,code").eq("id", se.user.id).maybeSingle().then(function (x) {
+          var p = x.data || {};
+          var em = se.user.email || "";
+          var o = { id: se.user.id, nick: p.nick || em.split("@")[0] || "玩家", avatar: p.avatar || "🙂", code: p.code || "" };
+          try { localStorage.setItem("byProfile", JSON.stringify(o)); } catch (e) {}
+          return o;
+        });
+      }).then(function (o) {
+        if (o) { return o; }
+        var s = null;
+        try { s = JSON.parse(localStorage.getItem("byAuthUser") || "null"); } catch (e) {}
+        return { id: "", nick: (s && s.email ? s.email.split("@")[0] : "玩家"), avatar: "🙂", code: "" };
+      }).catch(function () {
+        return { id: "", nick: "玩家", avatar: "🙂", code: "" };
+      });
+    },
+    // 保存昵称和头像到云端（所有设备登录都能看到）
+    saveProfile: function (nick, avatar) {
+      return withSession(function (sb, se) {
+        var em = se.user.email || "";
+        return sb.from("profiles").select("id,code").eq("id", se.user.id).maybeSingle().then(function (q) {
+          var has = !!(q.data && q.data.id);
+          var code = (q.data && q.data.code) || "";
+          if (has) {
+            return sb.from("profiles").update({ nick: nick, avatar: avatar }).eq("id", se.user.id).then(function (u) {
+              if (u.error) { throw u.error; }
+              return { id: se.user.id, nick: nick, avatar: avatar, code: code };
+            });
+          }
+          return sha256(em.toLowerCase()).then(function (h) {
+            var c = code || randCode();
+            return sb.from("profiles").insert({ id: se.user.id, code: c, nick: nick, avatar: avatar, email_hash: h }).then(function (u) {
+              if (u.error) { throw u.error; }
+              return { id: se.user.id, nick: nick, avatar: avatar, code: c };
+            });
+          });
+        });
+      }).then(function (o) {
+        if (!o) { throw new Error("没登录"); }
+        try { localStorage.setItem("byProfile", JSON.stringify(o)); } catch (e) {}
+        return o;
+      });
+    },
+    // 批量按 user_id 取资料（榜上显示头像和昵称用；profiles 表是公开可读的）
+    profilesByIds: function (ids) {
+      if (!ids || !ids.length) { return Promise.resolve({}); }
+      return ensure().then(function (sb) {
+        if (!sb) { return {}; }
+        return sb.from("profiles").select("id,nick,avatar,code").in("id", ids).then(function (x) {
+          var m = {};
+          (x.data || []).forEach(function (p) { m[p.id] = p; });
+          return m;
+        });
+      }).catch(function () { return {}; });
+    },
+    // 我的好友 id 集合
+    friendIds: function () {
+      return withSession(function (sb, se) {
+        return sb.from("friends").select("owner,friend")
+          .or("owner.eq." + se.user.id + ",friend.eq." + se.user.id)
+          .then(function (x) {
+            var out = {};
+            (x.data || []).forEach(function (r) { out[r.owner === se.user.id ? r.friend : r.owner] = 1; });
+            return out;
+          });
+      }).then(function (o) { return o || {}; }).catch(function () { return {}; });
+    },
+    // 加好友（重复加不会报错）
+    addFriend: function (uid) {
+      return withSession(function (sb, se) {
+        if (uid === se.user.id) { throw new Error("不能加自己"); }
+        return sb.from("friends").insert({ owner: se.user.id, friend: uid }).then(function (x) {
+          if (x.error) {
+            if (x.error.code === "23505") { return true; }
+            throw x.error;
+          }
+          return true;
+        });
+      });
     }
   };
 })();

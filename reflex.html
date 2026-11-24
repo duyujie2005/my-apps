@@ -177,20 +177,52 @@
   }
 
   // 全站榜单：所有账号（包括新注册的）都能看到，并显示是谁打的
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
   function renderGlobal() {
     if (!window.SYNC) { return; }
     window.SYNC.topScores("reflex", 8, true).then(function (rows) {
       if (!rows || !rows.length) { return; }
       const box = document.getElementById("boardList");
       if (!box) { return; }
-      box.innerHTML = rows.map(function (r, i) {
-        return '<div class="row">' +
-          '<span class="rk' + (i === 0 ? " g" : "") + '">' + (i + 1) + '</span>' +
-          '<span class="nm" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + (r.name || "玩家") + '</span>' +
-          '<span class="av">平均 ' + Math.round(r.score) + 'ms</span></div>';
-      }).join("");
-      const t = document.querySelector(".board .t span");
-      if (t) { t.textContent = "全站前 8 名 · 所有账号都能看到（平均越快越前）"; }
+      const ids = rows.map(function (r) { return r.user_id; }).filter(Boolean);
+      return Promise.all([window.SYNC.profilesByIds(ids), window.SYNC.friendIds(), window.SYNC.profile()]).then(function (res) {
+        const prof = res[0] || {};
+        const fids = res[1] || {};
+        const me = res[2] || {};
+        box.innerHTML = rows.map(function (r, i) {
+          const p = prof[r.user_id] || {};
+          const nm = esc(p.nick || r.name || "玩家");
+          const avv = esc(p.avatar || "🙂");
+          const mine = !!(me.id && r.user_id === me.id);
+          let act;
+          if (mine) { act = '<span style="font-size:11px;color:#2b7cff">我</span>'; }
+          else if (fids[r.user_id]) { act = '<span style="font-size:11px;color:#8a929e">✓好友</span>'; }
+          else { act = '<a class="addf" data-uid="' + esc(r.user_id) + '" style="font-size:11px;color:#2b7cff;cursor:pointer">+加好友</a>'; }
+          return '<div class="row' + (mine ? " me" : "") + '">' +
+            '<span class="rk' + (i === 0 ? " g" : "") + '">' + (i + 1) + '</span>' +
+            '<span style="font-size:15px;line-height:1">' + avv + '</span>' +
+            '<span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + nm + '</span>' +
+            act +
+            '<span class="av" style="width:74px;text-align:right">平均 ' + Math.round(r.score) + 'ms</span></div>';
+        }).join("");
+        box.querySelectorAll(".addf").forEach(function (a) {
+          a.onclick = function () {
+            const uid = a.getAttribute("data-uid");
+            a.textContent = "…";
+            window.SYNC.addFriend(uid).then(function () {
+              a.textContent = "✓已加";
+              a.style.color = "#8a929e";
+            }).catch(function () { a.textContent = "加失败"; });
+          };
+        });
+        const t = document.querySelector(".board .t span");
+        if (t) { t.textContent = "全站前 8 名 · 名字右边可以直接加好友（平均越快越前）"; }
+      });
     }).catch(function () {});
   }
 
