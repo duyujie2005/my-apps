@@ -106,7 +106,7 @@
   const board = document.getElementById("board");
 
   let score = 0, streak = 0, maxStreak = 0, left = TOTAL_SEC;
-  let running = false, moleIdx = -1, startTs = 0, rafId = 0, lastSec = 30;
+  let running = false, moleIdx = -1, startTs = 0, tickId = 0, lastSec = 30;
   let audioCtx = null;
 
   for (let i = 0; i < HOLES; i++) {
@@ -180,6 +180,7 @@
     hud();
     startTs = performance.now();
     nextMole();
+    tickId = setInterval(loop, 100);   // 用定时器计时，窗口被遮住也不会停
     loop();
   }
 
@@ -190,8 +191,7 @@
     document.getElementById("timebar").style.width = (left / TOTAL_SEC * 100) + "%";
     const sec = Math.ceil(left);
     if (sec !== lastSec) { lastSec = sec; document.getElementById("left").textContent = sec; }
-    if (left <= 0) { endGame(); return; }
-    rafId = requestAnimationFrame(loop);
+    if (left <= 0) { endGame(); }
   }
 
   function rankOf(perSec) {
@@ -204,7 +204,7 @@
 
   function endGame() {
     running = false;
-    cancelAnimationFrame(rafId);
+    clearInterval(tickId);
     left = 0;
     moleIdx = -1;
     for (const h of board.children) { h.classList.remove("mole"); h.textContent = ""; }
