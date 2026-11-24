@@ -87,7 +87,7 @@
   <div class="big" id="rScore">0 只</div>
   <div class="stats">
     <div>打中<b id="rHit">0</b></div>
-    <div>每秒<b id="rSpeed">0</b></div>
+    <div>平均间隔<b id="rSpeed">0</b></div>
     <div>最长连击<b id="rStreak">0</b></div>
     <div>考级档位<b id="rRank">--</b></div>
   </div>
@@ -194,11 +194,11 @@
     if (left <= 0) { endGame(); }
   }
 
-  function rankOf(perSec) {
-    if (perSec >= 5) { return "电竞手速"; }
-    if (perSec >= 3.5) { return "职业级"; }
-    if (perSec >= 2.5) { return "很快"; }
-    if (perSec >= 1.5) { return "一般"; }
+  function rankOf(ms) {
+    if (ms > 0 && ms <= 200) { return "电竞手速"; }
+    if (ms > 0 && ms <= 280) { return "职业级"; }
+    if (ms > 0 && ms <= 400) { return "很快"; }
+    if (ms > 0 && ms <= 600) { return "一般"; }
     return "慢慢来";
   }
 
@@ -215,13 +215,13 @@
 
     const oldBest = best();
     if (score > oldBest) { localStorage.setItem("whackBest", String(score)); }
-    const perSec = score / TOTAL_SEC;
+    const avgMs = score > 0 ? Math.round(TOTAL_SEC * 1000 / score) : 0;
 
     document.getElementById("rScore").textContent = score + " 只";
     document.getElementById("rHit").textContent = score;
-    document.getElementById("rSpeed").textContent = perSec.toFixed(1);
+    document.getElementById("rSpeed").textContent = avgMs + "ms";
     document.getElementById("rStreak").textContent = maxStreak;
-    document.getElementById("rRank").textContent = rankOf(perSec);
+    document.getElementById("rRank").textContent = rankOf(avgMs);
     document.getElementById("rBest").textContent = score > oldBest
       ? "🎉 破纪录！上一局最高 " + oldBest + " 只"
       : "历史最高 " + oldBest + " 只，还差 " + (oldBest - score) + " 只";
