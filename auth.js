@@ -167,18 +167,29 @@
         });
       });
     },
-    // 取全站榜：ascending=true 时小的排前面（反射弧用）
+    // 取全站榜：ascending=true 时小的排前面（反射弧用）；同一个人只保留最好的一条
     topScores: function (game, n, ascending) {
+      var want = n || 10;
       return ensure().then(function (sb) {
         if (!sb) { return []; }
         return sb.from("scores")
-          .select("name,score,valid,created_at")
+          .select("user_id,name,score,valid,created_at")
           .eq("game", game)
           .order("score", { ascending: !!ascending })
-          .limit(n || 10)
+          .limit(Math.min(want * 6, 60))
           .then(function (x) {
             if (x.error) { throw x.error; }
-            return x.data || [];
+            var rows = x.data || [];
+            var seen = {};
+            var out = [];
+            for (var i = 0; i < rows.length; i++) {
+              var k = rows[i].user_id || ("n:" + rows[i].name);
+              if (seen[k]) { continue; }
+              seen[k] = 1;
+              out.push(rows[i]);
+              if (out.length >= want) { break; }
+            }
+            return out;
           });
       }).catch(function () { return []; });
     }
