@@ -10,6 +10,10 @@ on:
 permissions:
   contents: write
 
+env:
+  APP_VERSION_NAME: '1.0.0'
+  APP_VERSION_CODE: '1'
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -33,18 +37,43 @@ jobs:
             yes | "$SM" --licenses > /dev/null 2>&1 || true
             "$SM" "platforms;android-34" "build-tools;34.0.0" > /dev/null
           fi
-          mkdir -p build/classes build/dex build/pack android/res/mipmap-xxxhdpi
-          curl -fsSL --retry 3 -o android/res/mipmap-xxxhdpi/ic_launcher.png https://duyujie2005.github.io/my-apps/icon-192.png
+          mkdir -p build/classes build/dex build/pack android/res/mipmap-xxxhdpi android/res/mipmap-hdpi android/res/mipmap-xhdpi android/res/mipmap-xxhdpi
+          curl -fsSL --retry 3 -o android/res/mipmap-xxxhdpi/ic_launcher.png https://duyujie2005.github.io/my-apps/icon-512.png
+          cp android/res/mipmap-xxxhdpi/ic_launcher.png android/res/mipmap-hdpi/ic_launcher.png
+          cp android/res/mipmap-xxxhdpi/ic_launcher.png android/res/mipmap-xhdpi/ic_launcher.png
+          cp android/res/mipmap-xxxhdpi/ic_launcher.png android/res/mipmap-xxhdpi/ic_launcher.png
           "$BT/aapt2" compile -o build/res.zip --dir android/res
           javac -source 8 -target 8 -Xlint:-options -classpath "$PLAT" -d build/classes android/MainActivity.java
           "$BT/d8" --lib "$PLAT" --min-api 21 --output build/dex $(find build/classes -name '*.class')
           cp build/dex/classes.dex build/pack/classes.dex
-          "$BT/aapt2" link -o build/base.apk -I "$PLAT" --manifest android/AndroidManifest.xml -R build/res.zip --auto-add-overlay --min-sdk-version 21 --target-sdk-version 34 --version-code 1 --version-name 1.0
+          "$BT/aapt2" link -o build/base.apk -I "$PLAT" --manifest android/AndroidManifest.xml -R build/res.zip --auto-add-overlay --min-sdk-version 21 --target-sdk-version 34 --version-code "$APP_VERSION_CODE" --version-name "$APP_VERSION_NAME"
           ( cd build/pack && zip -q ../base.apk classes.dex )
           "$BT/zipalign" -f 4 build/base.apk build/aligned.apk
-          keytool -genkeypair -keystore build/key.jks -alias app -keyalg RSA -keysize 2048 -validity 10000 -storepass duobaoshelf -keypass duobaoshelf -dname "CN=Du Yujie, O=Shelf, C=CN" > /dev/null 2>&1
-          "$BT/apksigner" sign --ks build/key.jks --ks-pass pass:duobaoshelf --key-pass pass:duobaoshelf --out build/app.apk build/aligned.apk
-          "$BT/apksigner" verify --print-certs build/app.apk | head -3
+
+      - name: Sign apk
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_PASS: ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        run: |
+          set -e
+          BT="$ANDROID_HOME/build-tools/34.0.0"
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "== 使用仓库 Secrets 里的固定签名密钥（上架必需）=="
+            echo "$KEYSTORE_B64" | base64 -d > build/key.jks
+            PASS="$KEYSTORE_PASS"
+            ALIAS="${KEY_ALIAS:-app}"
+          else
+            echo "::warning::没有配置 ANDROID_KEYSTORE_B64，本次临时生成密钥。上架应用商店前必须改用固定密钥，否则每次更新签名不同，商店会拒绝升级。"
+            keytool -genkeypair -keystore build/key.jks -alias app -keyalg RSA -keysize 2048 -validity 10000 \
+              -storepass duobaoshelf -keypass duobaoshelf -dname "CN=Du Yujie, O=Shelf, C=CN" > /dev/null 2>&1
+            PASS="duobaoshelf"
+            ALIAS="app"
+          fi
+          "$BT/apksigner" sign --ks build/key.jks --ks-pass "pass:$PASS" --key-pass "pass:$PASS" \
+            --ks-key-alias "$ALIAS" --out build/app.apk build/aligned.apk
+          "$BT/apksigner" verify --print-certs build/app.apk | head -5
+          echo "包名: $( "$BT/aapt2" dump badging build/app.apk | head -1 )"
           ls -l build/app.apk
 
       - uses: actions/upload-artifact@v4
