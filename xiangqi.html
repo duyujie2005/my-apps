@@ -381,18 +381,35 @@
     return s;
   }
 
+  // 云端可能还没加载完（supabase.js 懒加载），点按钮时再等它一次
+  function ensureId() {
+    if (S.myId) { return Promise.resolve(S.myId); }
+    if (!window.SYNC) { return Promise.resolve(""); }
+    el.hintText.textContent = "正在连云端…";
+    return SYNC.ready().then(function () {
+      return SYNC.myId();
+    }).then(function (id) {
+      S.myId = id || "";
+      return S.myId;
+    }).catch(function () { return ""; });
+  }
+
   function createRoom() {
-    if (!S.myId) { el.hintText.textContent = "还没连上云端，稍等一下再试"; return; }
-    var code = genCode();
-    SYNC.profile().then(function (p) {
-      return SYNC.xqNew(code, { fen: START, moves: [] }, p.nick || "");
-    }).then(function () {
-      S.room = code; S.myColor = "r"; S.rivalNick = ""; S.rivalArrived = false;
-      S.fen = START; S.side = "r"; S.history = []; S.over = false; S.result = ""; S.lastMove = null;
-      el.roomInfo.style.display = "flex";
-      el.roomCode.textContent = code;
-      render();
-      startPoll();
+    ensureId().then(function (id) {
+      if (!id) { el.hintText.textContent = "云端没连上：等一两秒再点一次「建房间」"; return null; }
+      var code = genCode();
+      return SYNC.profile().then(function (p) {
+        return SYNC.xqNew(code, { fen: START, moves: [] }, p.nick || "");
+      }).then(function () {
+        S.room = code; S.myColor = "r"; S.rivalNick = ""; S.rivalArrived = false;
+        S.fen = START; S.side = "r"; S.history = []; S.over = false; S.result = ""; S.lastMove = null;
+        S.lastStamp = "";
+        el.roomInfo.style.display = "flex";
+        el.roomCode.textContent = code;
+        el.hintText.textContent = "房间建好了，把号码告诉对方";
+        render();
+        startPoll();
+      });
     }).catch(function (err) {
       el.hintText.textContent = "建房失败：" + (err && err.message ? err.message : "网络问题");
     });
@@ -401,16 +418,20 @@
   function joinRoom() {
     var code = (el.roomInput.value || "").replace(/[^0-9]/g, "");
     if (code.length !== 6) { el.hintText.textContent = "房间号要 6 位数字"; return; }
-    if (!S.myId) { el.hintText.textContent = "还没连上云端，稍等一下再试"; return; }
-    SYNC.profile().then(function (p) {
-      return SYNC.xqJoin(code, { fen: START, moves: [] }, p.nick || "");
-    }).then(function (ok) {
-      if (!ok) { el.hintText.textContent = "房间里已经有人了，换一个房间号"; return; }
-      S.room = code; S.myColor = "b"; S.rivalArrived = true; S.thinking = false;
-      el.roomInfo.style.display = "flex";
-      el.roomCode.textContent = code;
-      render();
-      startPoll(true);
+    ensureId().then(function (id) {
+      if (!id) { el.hintText.textContent = "云端没连上：等一两秒再点一次「加入房间」"; return null; }
+      return SYNC.profile().then(function (p) {
+        return SYNC.xqJoin(code, { fen: START, moves: [] }, p.nick || "");
+      }).then(function (ok) {
+        if (!ok) { el.hintText.textContent = "房间里已经有人了，换一个房间号"; return; }
+        S.room = code; S.myColor = "b"; S.rivalArrived = true; S.thinking = false;
+        S.lastStamp = "";
+        el.roomInfo.style.display = "flex";
+        el.roomCode.textContent = code;
+        el.hintText.textContent = "已加入，红方先行";
+        render();
+        startPoll(true);
+      });
     }).catch(function (err) {
       el.hintText.textContent = "加入失败：" + (err && err.message ? err.message : "网络问题");
     });
@@ -580,9 +601,22 @@
   document.querySelector('.lv[data-lv="2"]').classList.add("pri");
   setMode("ai");
 
-  // 拿自己的 id（联机要用）
+  // 提前把云端拉起来（supabase.js 108KB，早点下载，点按钮时就不用等）
   if (window.SYNC) {
-    SYNC.myId().then(function (id) { S.myId = id || ""; });
+    S.myId = "";
+    var tryId = 0;
+    function getId() {
+      tryId++;
+      SYNC.ready().then(function () { return SYNC.myId(); }).then(function (id) {
+        S.myId = id || "";
+        if (!S.myId) { el.dot.className = "dot off"; }
+        else { el.dot.className = "dot"; }
+        if (!S.myId && tryId < 4) { setTimeout(getId, 3000); }
+      }).catch(function () {
+        if (tryId < 4) { setTimeout(getId, 3000); }
+      });
+    }
+    getId();
   } else {
     el.dot.className = "dot off";
     el.hintText.textContent = "云端没连上，只能玩单机和人机";
