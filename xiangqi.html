@@ -464,6 +464,7 @@
       if (!S.rivalArrived) {
         S.rivalArrived = true;
         S.rivalNick = S.myColor === "r" ? (row.black_nick || "对手") : (row.red_nick || "对手");
+        updateStatus();
       } else {
         S.rivalNick = S.myColor === "r" ? (row.black_nick || S.rivalNick) : (row.red_nick || S.rivalNick);
       }
@@ -493,10 +494,14 @@
           }
           S.selected = null;
           render();
+        } else {
+          updateStatus();
         }
       }
-    }).catch(function () {});
+    }).catch(function (err) { el.hintText.textContent = '同步出错：' + ((err && err.message) || '网络'); });
   }
+
+  window.XQDBG = S;
 
   function leaveRoom() {
     stopPoll();
