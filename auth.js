@@ -377,6 +377,65 @@ window.AV = function (a, px) {
           return true;
         });
       });
+    },
+    // ---------- 中国象棋联机（房间号对战） ----------
+    // 建房：red=我，black 空着等人
+    xqNew: function (code, state, nick) {
+      return withSession(function (sb, se) {
+        return sb.from("xq_games").insert({
+          id: code, red: se.user.id, black: null, red_nick: nick || "",
+          status: "waiting", state: state, updated_at: new Date().toISOString()
+        }).then(function (x) {
+          if (x.error) { throw x.error; }
+          return true;
+        });
+      });
+    },
+    // 加入：抢黑方座位（只有还没人坐时才成功）
+    xqJoin: function (code, state, nick) {
+      return withSession(function (sb, se) {
+        return sb.from("xq_games").update({
+          black: se.user.id, black_nick: nick || "", status: "playing",
+          state: state, updated_at: new Date().toISOString()
+        }).eq("id", code).is("black", null).select("id").then(function (x) {
+          if (x.error) { throw x.error; }
+          return !!(x.data && x.data.length);
+        });
+      });
+    },
+    // 读房间（每 2 秒轮询一次）
+    xqGet: function (code) {
+      return withSession(function (sb, se) {
+        return sb.from("xq_games")
+          .select("id,red,black,red_nick,black_nick,status,state,updated_at")
+          .eq("id", code).maybeSingle().then(function (x) {
+            if (x.error) { throw x.error; }
+            return x.data || null;
+          });
+      });
+    },
+    // 写回棋盘/状态
+    xqSave: function (code, patch) {
+      return withSession(function (sb, se) {
+        patch.updated_at = new Date().toISOString();
+        return sb.from("xq_games").update(patch).eq("id", code).then(function (x) {
+          if (x.error) { throw x.error; }
+          return true;
+        });
+      });
+    },
+    // 退出房间时删掉自己的棋局
+    xqDrop: function (code) {
+      return withSession(function (sb, se) {
+        return sb.from("xq_games").delete().eq("id", code).then(function (x) {
+          if (x.error) { throw x.error; }
+          return true;
+        });
+      });
+    },
+    // 我自己的 user id（联机判断红黑）
+    myId: function () {
+      return withSession(function (sb, se) { return se.user.id; }).catch(function () { return ""; });
     }
   };
 })();

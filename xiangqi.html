@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1420">
+<title>中国象棋 · 杜裕杰的软件柜</title>
+<script src="auth.js" data-guard="1"></script>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0; padding: 12px 14px 40px;
+    font-family: "Microsoft YaHei", -apple-system, "PingFang SC", sans-serif;
+    background: #0f1420; color: #e9eef7;
+  }
+  a.back { color: #7fa6e8; text-decoration: none; font-size: 13px; }
+  h1 { font-size: 18px; margin: 6px 0 12px; letter-spacing: .5px; }
+
+  .modes { display: flex; gap: 8px; margin-bottom: 10px; flex-wrap: wrap; }
+  .modes button {
+    flex: 1 1 30%; min-width: 30%; padding: 10px 6px; border-radius: 10px; cursor: pointer;
+    background: #1a2232; color: #cfd9ea; border: 1px solid #26324a; font-size: 13px;
+    font-family: inherit;
+  }
+  .modes button.on { background: #2b6df6; color: #fff; border-color: #2b6df6; }
+
+  .bar { display: flex; align-items: center; gap: 8px; margin: 8px 0; font-size: 13px; color: #9db0cc; flex-wrap: wrap; }
+  .bar .dot { width: 8px; height: 8px; border-radius: 50%; background: #2e9e63; }
+  .bar .dot.off { background: #5b6478; }
+
+  .board {
+    max-width: 520px; margin: 0 auto; padding: 4.4% 5.2% 5.2%;
+    background: linear-gradient(160deg, #f0d7a4, #e3c186);
+    border-radius: 14px; box-shadow: 0 10px 30px #00000055, inset 0 0 0 1px #ffffff55;
+    position: relative;
+  }
+  .inner { position: relative; width: 100%; aspect-ratio: 8 / 9; }
+  .inner svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .river {
+    position: absolute; left: 0; right: 0; top: 44.44%; transform: translateY(-50%);
+    display: flex; justify-content: space-between; padding: 0 12%;
+    font-size: 13px; color: #7a5230; pointer-events: none; letter-spacing: 6px;
+    opacity: .75; font-family: "KaiTi", "STKaiti", serif;
+  }
+  .piece {
+    position: absolute; width: 11.6%; aspect-ratio: 1; transform: translate(-50%, -50%);
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: clamp(12px, 4.6vw, 26px); font-weight: 700; cursor: pointer;
+    background: radial-gradient(circle at 34% 28%, #fffdf5, #f2e2c0 70%, #dcc59b);
+    box-shadow: 0 2px 4px #00000033, inset 0 0 0 2px #ffffffAA, inset 0 0 0 3px #c9ac79;
+    user-select: none; transition: box-shadow .12s, transform .08s;
+  }
+  .piece.red { color: #c8281c; }
+  .piece.black { color: #23272e; }
+  .piece.sel { box-shadow: 0 0 0 3px #2b6df6, 0 3px 10px #00000044; transform: translate(-50%, -50%) scale(1.04); }
+  .piece.last { box-shadow: 0 0 0 3px #ffb100AA, 0 3px 10px #00000044; }
+  .hint {
+    position: absolute; width: 4.4%; aspect-ratio: 1; transform: translate(-50%, -50%);
+    border-radius: 50%; background: #2b6df6AA; box-shadow: 0 0 0 4px #2b6df633; cursor: pointer;
+  }
+  .hint.cap { background: #e0492cAA; }
+  .lock { position: absolute; inset: 0; background: #00000012; border-radius: 14px; display: none; }
+
+  .panel { max-width: 520px; margin: 12px auto 0; }
+  .status { font-size: 14px; min-height: 22px; margin-bottom: 8px; color: #d7e0ef; }
+  .status b { color: #7fb0ff; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; }
+  .btns button {
+    padding: 9px 12px; border-radius: 9px; cursor: pointer; font-size: 13px; font-family: inherit;
+    background: #1a2232; color: #cfd9ea; border: 1px solid #26324a;
+  }
+  .btns button.pri { background: #2b6df6; border-color: #2b6df6; color: #fff; }
+  .btns button:disabled { opacity: .45; cursor: default; }
+
+  .room { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+  .room input {
+    width: 130px; padding: 9px 10px; border-radius: 9px; border: 1px solid #26324a;
+    background: #131a28; color: #e9eef7; font-size: 15px; letter-spacing: 3px; font-family: inherit;
+  }
+  .room .code {
+    font-size: 20px; letter-spacing: 5px; color: #ffd479; font-weight: 700;
+  }
+  .tip { font-size: 12px; color: #8a93a5; line-height: 1.6; }
+
+  .moves {
+    max-height: 132px; overflow: auto; background: #131a28; border: 1px solid #1e2740;
+    border-radius: 10px; padding: 8px 10px; font-size: 12.5px; line-height: 1.9; color: #aab6c9;
+    margin-top: 10px;
+  }
+  .moves .r { color: #ff9086; }
+  .moves .b { color: #9fc6ff; }
+  .moves span.no { color: #59637a; margin-right: 4px; }
+  .foot { max-width: 520px; margin: 16px auto 0; font-size: 12px; color: #6f7a8d; line-height: 1.7; }
+</style>
+</head>
+<body>
+
+<a class="back" href="index.html">‹ 返回软件柜</a>
+<h1>中国象棋</h1>
+
+<div class="modes">
+  <button data-mode="self">自己和自己打</button>
+  <button data-mode="online">玩家 vs 玩家</button>
+  <button data-mode="ai">我和人机打</button>
+</div>
+
+<div class="bar" id="bar"><span class="dot" id="dot"></span><span id="hintText">准备开局</span></div>
+
+<div class="board" id="board">
+  <div class="inner" id="inner">
+    <svg id="grid" viewBox="0 0 8 9" preserveAspectRatio="none"></svg>
+    <div class="river"><span>楚 河</span><span>汉 界</span></div>
+  </div>
+  <div class="lock" id="lock"></div>
+</div>
+
+<div class="panel">
+  <div class="status" id="status"></div>
+  <div id="aiOpts" style="display:none">
+    <div class="room">
+      <span class="tip">难度</span>
+      <button class="lv" data-lv="1">简单</button>
+      <button class="lv" data-lv="2">普通</button>
+      <button class="lv" data-lv="3">困难</button>
+    </div>
+  </div>
+  <div id="onlineOpts" style="display:none">
+    <div class="room">
+      <input id="roomInput" placeholder="房间号" maxlength="6" inputmode="numeric">
+      <button id="joinBtn">加入房间</button>
+      <button id="newBtn" class="pri">建房间</button>
+    </div>
+    <div class="room" id="roomInfo" style="display:none">
+      <span class="tip">房间号</span><span class="code" id="roomCode"></span>
+      <button id="copyBtn">复制</button>
+      <button id="leaveBtn">退出房间</button>
+    </div>
+  </div>
+  <div class="btns">
+    <button id="undoBtn">悔一步</button>
+    <button id="restartBtn" class="pri">重新开局</button>
+    <button id="resignBtn" style="display:none">认输</button>
+  </div>
+  <div class="moves" id="moves"></div>
+</div>
+
+<div class="foot">
+  走法：点自己的棋子 → 蓝点是能走的位置 → 再点蓝点走棋。<br>
+  联机模式需要两个都登录的账号：一人建房间拿到 6 位房间号，另一人输入房间号加入，红方执红先行。
+</div>
+
+<script src="xiangqi.js"></script>
+<script>
+(function () {
+  var XQ = window.XQ;
+  var START = XQ.START_FEN;
+
+  var el = {
+    board: document.getElementById("board"),
+    inner: document.getElementById("inner"),
+    grid: document.getElementById("grid"),
+    lock: document.getElementById("lock"),
+    status: document.getElementById("status"),
+    hintText: document.getElementById("hintText"),
+    dot: document.getElementById("dot"),
+    moves: document.getElementById("moves"),
+    aiOpts: document.getElementById("aiOpts"),
+    onlineOpts: document.getElementById("onlineOpts"),
+    roomInput: document.getElementById("roomInput"),
+    roomInfo: document.getElementById("roomInfo"),
+    roomCode: document.getElementById("roomCode"),
+    joinBtn: document.getElementById("joinBtn"),
+    newBtn: document.getElementById("newBtn"),
+    copyBtn: document.getElementById("copyBtn"),
+    leaveBtn: document.getElementById("leaveBtn"),
+    undoBtn: document.getElementById("undoBtn"),
+    restartBtn: document.getElementById("restartBtn"),
+    resignBtn: document.getElementById("resignBtn")
+  };
+
+  var S = {
+    mode: "ai",              // self | online | ai
+    fen: START,
+    side: "r",               // 该谁走：r 红 / b 黑
+    history: [],             // 每步 {mv, fen, side, text}
+    over: false,
+    result: "",
+    selected: null,
+    lastMove: null,
+    humanSide: "r",          // 人机模式里我执哪方
+    level: 2,
+    myId: "",
+    room: "",                // 房间号
+    myColor: "",             // 联机时我是 r 还是 b
+    rivalNick: "",
+    rivalArrived: false,
+    thinking: false,
+    pollTimer: null,
+    lastStamp: ""
+  };
+
+  // ---------------- 棋盘绘制 ----------------
+  function drawGrid() {
+    var p = [];
+    p.push('<g stroke="#8a6240" stroke-width="1.2" vector-effect="non-scaling-stroke" fill="none" stroke-linecap="round">');
+    for (var y = 0; y <= 9; y++) { p.push('<line x1="0" y1="' + y + '" x2="8" y2="' + y + '"/>'); }
+    for (var x = 0; x <= 8; x++) {
+      if (x === 0 || x === 8) { p.push('<line x1="' + x + '" y1="0" x2="' + x + '" y2="9"/>'); }
+      else {
+        p.push('<line x1="' + x + '" y1="0" x2="' + x + '" y2="4"/>');
+        p.push('<line x1="' + x + '" y1="5" x2="' + x + '" y2="9"/>');
+      }
+    }
+    // 九宫斜线
+    p.push('<line x1="3" y1="0" x2="5" y2="2"/><line x1="5" y1="0" x2="3" y2="2"/>');
+    p.push('<line x1="3" y1="7" x2="5" y2="9"/><line x1="5" y1="7" x2="3" y2="9"/>');
+    // 外框加粗
+    p.push('<rect x="0" y="0" width="8" height="9" stroke-width="1.8"/>');
+    p.push('</g>');
+    el.grid.innerHTML = p.join("");
+  }
+
+  function posStyle(x, y) {
+    return "left:" + (x / 8 * 100) + "%;top:" + (y / 9 * 100) + "%";
+  }
+
+  var CH = { K: "帅", A: "仕", B: "相", N: "马", R: "车", C: "炮", P: "兵",
+             k: "将", a: "士", b: "象", n: "马", r: "车", c: "炮", p: "卒" };
+
+  function render() {
+    var b = XQ.parseFEN(S.fen);
+    var olds = el.inner.querySelectorAll(".piece,.hint");
+    for (var i = 0; i < olds.length; i++) { olds[i].remove(); }
+
+    for (var y = 0; y < 10; y++) {
+      for (var x = 0; x < 9; x++) {
+        var pc = b[XQ.idx(x, y)];
+        if (!pc) { continue; }
+        var d = document.createElement("div");
+        d.className = "piece " + (XQ.isRed(pc) ? "red" : "black") +
+          (S.selected && S.selected.x === x && S.selected.y === y ? " sel" : "") +
+          (S.lastMove && ((S.lastMove.tx === x && S.lastMove.ty === y) || (S.lastMove.fx === x && S.lastMove.fy === y)) ? " last" : "");
+        d.textContent = CH[pc];
+        d.style.cssText = posStyle(x, y);
+        d.dataset.x = x; d.dataset.y = y;
+        d.addEventListener("pointerdown", onPieceDown);
+        el.inner.appendChild(d);
+      }
+    }
+
+    // 可走点
+    if (S.selected && !S.over && canPlay()) {
+      var ms = XQ.legalMoves(b, S.side).filter(function (m) {
+        return m.fx === S.selected.x && m.fy === S.selected.y;
+      });
+      ms.forEach(function (m) {
+        var h = document.createElement("div");
+        h.className = "hint" + (m.cap ? " cap" : "");
+        h.style.cssText = posStyle(m.tx, m.ty);
+        h.dataset.tx = m.tx; h.dataset.ty = m.ty;
+        h.addEventListener("pointerdown", onHintDown);
+        el.inner.appendChild(h);
+      });
+    }
+
+    renderMoves();
+    updateStatus();
+  }
+
+  function renderMoves() {
+    var html = [];
+    for (var i = 0; i < S.history.length; i++) {
+      var h = S.history[i];
+      html.push('<span class="no">' + (i + 1) + '.</span><span class="' + (h.side === "r" ? "r" : "b") + '">' + h.text + "</span>");
+      if (i % 4 === 3 || i === S.history.length - 1) { html.push("<br>"); }
+      else { html.push("　"); }
+    }
+    el.moves.innerHTML = html.join("") || '<span class="no">还没有走棋</span>';
+    el.moves.scrollTop = el.moves.scrollHeight;
+  }
+
+  function updateStatus() {
+    if (S.over) { el.status.innerHTML = "<b>" + S.result + "</b>"; return; }
+    if (S.mode === "self") {
+      el.status.innerHTML = "轮到你走：<b>" + (S.side === "r" ? "红方" : "黑方") + "</b>（两边都由你操作）";
+    } else if (S.mode === "ai") {
+      el.status.innerHTML = S.thinking ? "电脑在想…" :
+        (S.side === S.humanSide ? "轮到你走（你执<b>" + (S.humanSide === "r" ? "红" : "黑") + "</b>）"
+          : "电脑走棋中…");
+    } else if (S.mode === "online") {
+      if (!S.room) { el.status.innerHTML = "建房间或输入房间号加入"; return; }
+      if (!S.myColor) { el.status.innerHTML = "正在进入房间…"; return; }
+      if (S.rivalNick === "" && !S.rivalArrived) { el.status.innerHTML = "房间号 <b>" + S.room + "</b> · 等对手加入…"; return; }
+      el.status.innerHTML = S.side === S.myColor
+        ? "轮到你走（你执<b>" + (S.myColor === "r" ? "红" : "黑") + "</b>）"
+        : "等对方走（对手 <b>" + (S.rivalNick || "对手") + "</b>）";
+    }
+  }
+
+  function canPlay() {
+    if (S.over) { return false; }
+    if (S.mode === "self") { return true; }
+    if (S.mode === "ai") { return S.side === S.humanSide && !S.thinking; }
+    if (S.mode === "online") { return !!S.myColor && S.rivalArrived && S.side === S.myColor; }
+    return false;
+  }
+
+  // ---------------- 走棋 ----------------
+  function onPieceDown(e) {
+    e.preventDefault();
+    var x = parseInt(e.currentTarget.dataset.x, 10), y = parseInt(e.currentTarget.dataset.y, 10);
+    if (!canPlay()) { return; }
+    var b = XQ.parseFEN(S.fen);
+    var pc = b[XQ.idx(x, y)];
+    if (!pc) { return; }
+    if (XQ.sideOf(pc) !== S.side) { S.selected = null; render(); return; }
+    S.selected = (S.selected && S.selected.x === x && S.selected.y === y) ? null : { x: x, y: y };
+    render();
+  }
+
+  function onHintDown(e) {
+    e.preventDefault();
+    if (!canPlay() || !S.selected) { return; }
+    var tx = parseInt(e.currentTarget.dataset.tx, 10), ty = parseInt(e.currentTarget.dataset.ty, 10);
+    var b = XQ.parseFEN(S.fen);
+    var ms = XQ.legalMoves(b, S.side).filter(function (m) {
+      return m.fx === S.selected.x && m.fy === S.selected.y && m.tx === tx && m.ty === ty;
+    });
+    if (!ms.length) { return; }
+    doMove(b, ms[0], true);
+  }
+
+  function doMove(b, mv, writeBack) {
+    var text = XQ.moveText(b, mv);
+    var mover = S.side;
+    XQ.make(b, mv);
+    S.history.push({ mv: mv, fen: S.fen, side: mover, text: text });
+    S.fen = XQ.toFEN(b, XQ.other(mover));
+    S.side = XQ.other(mover);
+    S.lastMove = mv;
+    S.selected = null;
+
+    var end = XQ.gameOver(b, S.side);
+    if (end.over) {
+      S.over = true;
+      var winner = end.winner === "r" ? "红方" : "黑方";
+      if (S.mode === "ai") { S.result = end.winner === S.humanSide ? "你赢了（" + end.reason + "）" : "你输了（" + end.reason + "）"; }
+      else if (S.mode === "online") { S.result = (end.winner === S.myColor ? "你赢了" : "你输了") + "（" + end.reason + "）"; }
+      else { S.result = winner + "胜（" + end.reason + "）"; }
+    }
+    render();
+
+    if (S.mode === "online" && writeBack) { pushOnline(); }
+    if (S.mode === "ai" && !S.over && S.side !== S.humanSide && !S.thinking) { aiTurn(); }
+  }
+
+  function aiTurn() {
+    S.thinking = true;
+    updateStatus();
+    setTimeout(function () {
+      var mv = XQ.bestMove(S.fen, S.side, S.level);
+      S.thinking = false;
+      if (!mv) { render(); return; }
+      doMove(XQ.parseFEN(S.fen), mv, false);
+    }, 180);
+  }
+
+  // ---------------- 联机 ----------------
+  function pushOnline() {
+    if (!S.room) { return; }
+    SYNC.xqSave(S.room, {
+      state: { fen: S.fen, moves: S.history.map(function (h) { return h.text; }),
+               over: S.over, result: S.result },
+      status: S.over ? "done" : "playing"
+    }).catch(function () {});
+  }
+
+  function genCode() {
+    var s = "";
+    for (var i = 0; i < 6; i++) { s += Math.floor(Math.random() * 10); }
+    return s;
+  }
+
+  function createRoom() {
+    if (!S.myId) { el.hintText.textContent = "还没连上云端，稍等一下再试"; return; }
+    var code = genCode();
+    SYNC.profile().then(function (p) {
+      return SYNC.xqNew(code, { fen: START, moves: [] }, p.nick || "");
+    }).then(function () {
+      S.room = code; S.myColor = "r"; S.rivalNick = ""; S.rivalArrived = false;
+      S.fen = START; S.side = "r"; S.history = []; S.over = false; S.result = ""; S.lastMove = null;
+      el.roomInfo.style.display = "flex";
+      el.roomCode.textContent = code;
+      render();
+      startPoll();
+    }).catch(function (err) {
+      el.hintText.textContent = "建房失败：" + (err && err.message ? err.message : "网络问题");
+    });
+  }
+
+  function joinRoom() {
+    var code = (el.roomInput.value || "").replace(/[^0-9]/g, "");
+    if (code.length !== 6) { el.hintText.textContent = "房间号要 6 位数字"; return; }
+    if (!S.myId) { el.hintText.textContent = "还没连上云端，稍等一下再试"; return; }
+    SYNC.profile().then(function (p) {
+      return SYNC.xqJoin(code, { fen: START, moves: [] }, p.nick || "");
+    }).then(function (ok) {
+      if (!ok) { el.hintText.textContent = "房间里已经有人了，换一个房间号"; return; }
+      S.room = code; S.myColor = "b"; S.rivalArrived = true; S.thinking = false;
+      el.roomInfo.style.display = "flex";
+      el.roomCode.textContent = code;
+      render();
+      startPoll(true);
+    }).catch(function (err) {
+      el.hintText.textContent = "加入失败：" + (err && err.message ? err.message : "网络问题");
+    });
+  }
+
+  function startPoll(now) {
+    stopPoll();
+    if (now) { poll(); }
+    S.pollTimer = setInterval(poll, 2000);
+  }
+
+  function stopPoll() {
+    if (S.pollTimer) { clearInterval(S.pollTimer); S.pollTimer = null; }
+  }
+
+  function poll() {
+    if (!S.room) { return; }
+    SYNC.xqGet(S.room).then(function (row) {
+      if (!row) {
+        el.hintText.textContent = "房间不存在了（可能对方退出了）";
+        stopPoll();
+        return;
+      }
+      if (row.status === "waiting") {
+        S.rivalArrived = false;
+        updateStatus();
+        return;
+      }
+      // 有人来了
+      if (!S.rivalArrived) {
+        S.rivalArrived = true;
+        S.rivalNick = S.myColor === "r" ? (row.black_nick || "对手") : (row.red_nick || "对手");
+      } else {
+        S.rivalNick = S.myColor === "r" ? (row.black_nick || S.rivalNick) : (row.red_nick || S.rivalNick);
+      }
+      var st = row.state || {};
+      var stamp = (row.updated_at || "") + "|" + (st.fen || "") + "|" + (st.over ? "1" : "0");
+      if (stamp !== S.lastStamp) {
+        S.lastStamp = stamp;
+        // 对方认输/结束：哪怕棋盘没变也要显示结果
+        if (st.over && !S.over) {
+          S.over = true;
+          S.result = st.result || "对手已结束本局";
+          render();
+          return;
+        }
+        // 只有对方走了才需要同步（自己走的时候本地已经更新过）
+        if (st.fen && st.fen !== S.fen) {
+          S.fen = st.fen;
+          S.side = st.fen.split(" ")[1] || "r";
+          S.history = (st.moves || []).map(function (t, i) {
+            return { text: t, side: i % 2 === 0 ? "r" : "b" };
+          });
+          var b = XQ.parseFEN(S.fen);
+          var end = XQ.gameOver(b, S.side);
+          if (end.over) {
+            S.over = true;
+            S.result = (end.winner === S.myColor ? "你赢了" : "你输了") + "（" + end.reason + "）";
+          }
+          S.selected = null;
+          render();
+        }
+      }
+    }).catch(function () {});
+  }
+
+  function leaveRoom() {
+    stopPoll();
+    if (S.room) { SYNC.xqDrop(S.room).catch(function () {}); }
+    S.room = ""; S.myColor = ""; S.rivalArrived = false; S.lastStamp = "";
+    el.roomInfo.style.display = "none";
+    render();
+  }
+
+  // ---------------- 模式切换 / 按钮 ----------------
+  function setMode(m) {
+    S.mode = m;
+    S.selected = null;
+    if (S.mode !== "online") { stopPoll(); if (S.room) { leaveRoomSilently(); } }
+    el.aiOpts.style.display = m === "ai" ? "block" : "none";
+    el.onlineOpts.style.display = m === "online" ? "block" : "none";
+    el.resignBtn.style.display = m === "online" ? "" : "none";
+    document.querySelectorAll(".modes button").forEach(function (b) {
+      b.classList.toggle("on", b.dataset.mode === m);
+    });
+    if (m === "ai") { reset(); if (S.humanSide === "b") { aiTurn(); } }
+    else if (m === "self") { reset(); }
+    else { reset(); el.hintText.textContent = "建房间，或输入 6 位房间号加入"; }
+    render();
+  }
+
+  function leaveRoomSilently() {
+    if (S.room) { SYNC.xqDrop(S.room).catch(function () {}); }
+    S.room = ""; S.myColor = ""; S.rivalArrived = false; S.lastStamp = "";
+    el.roomInfo.style.display = "none";
+  }
+
+  function reset() {
+    S.fen = START; S.side = "r"; S.history = []; S.over = false; S.result = "";
+    S.selected = null; S.lastMove = null; S.thinking = false;
+    el.hintText.textContent = "";
+    render();
+  }
+
+  function undo() {
+    if (S.mode === "online") { el.hintText.textContent = "联机模式不能悔棋"; return; }
+    var steps = S.mode === "ai" ? 2 : 1;
+    while (steps > 0 && S.history.length) {
+      var h = S.history.pop();
+      S.fen = h.fen;
+      S.side = h.side;
+      steps--;
+    }
+    S.over = false; S.result = ""; S.selected = null;
+    S.lastMove = S.history.length ? S.history[S.history.length - 1].mv : null;
+    render();
+    if (S.mode === "ai" && !S.over && S.side !== S.humanSide) { aiTurn(); }
+  }
+
+  document.querySelectorAll(".modes button").forEach(function (b) {
+    b.addEventListener("click", function () { setMode(b.dataset.mode); });
+  });
+
+  document.querySelectorAll(".lv").forEach(function (b) {
+    b.addEventListener("click", function () {
+      S.level = parseInt(b.dataset.lv, 10);
+      document.querySelectorAll(".lv").forEach(function (o) { o.classList.toggle("pri", o === b); });
+      el.hintText.textContent = "难度：" + b.textContent;
+    });
+  });
+
+  el.newBtn.addEventListener("click", createRoom);
+  el.joinBtn.addEventListener("click", joinRoom);
+  el.leaveBtn.addEventListener("click", leaveRoom);
+  el.copyBtn.addEventListener("click", function () {
+    var t = S.room;
+    if (!t) { return; }
+    if (navigator.clipboard) { navigator.clipboard.writeText(t).then(function () { el.hintText.textContent = "房间号已复制"; }); }
+    else { el.roomInput.value = t; el.roomInput.select(); }
+  });
+  el.restartBtn.addEventListener("click", function () {
+    if (S.mode === "online") {
+      if (!S.myColor) { return; }
+      S.fen = START; S.side = "r"; S.history = []; S.over = false; S.result = ""; S.lastMove = null;
+      render(); pushOnline();
+    } else { reset(); if (S.mode === "ai" && S.humanSide === "b") { aiTurn(); } }
+  });
+  el.undoBtn.addEventListener("click", undo);
+  el.resignBtn.addEventListener("click", function () {
+    if (!S.room || S.over) { return; }
+    S.over = true;
+    S.result = "你认输了";
+    render();
+    SYNC.xqSave(S.room, {
+      status: "done",
+      state: {
+        fen: S.fen,
+        moves: S.history.map(function (h) { return h.text; }),
+        over: true,
+        result: S.myColor === "r" ? "黑方胜（对手认输）" : "红方胜（对手认输）"
+      }
+    }).catch(function () {});
+  });
+
+  // 初始化
+  drawGrid();
+  document.querySelector('.lv[data-lv="2"]').classList.add("pri");
+  setMode("ai");
+
+  // 拿自己的 id（联机要用）
+  if (window.SYNC) {
+    SYNC.myId().then(function (id) { S.myId = id || ""; });
+  } else {
+    el.dot.className = "dot off";
+    el.hintText.textContent = "云端没连上，只能玩单机和人机";
+  }
+})();
+</script>
+</body>
+</html>
