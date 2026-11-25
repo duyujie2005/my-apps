@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0f1420">
+<title>隐私政策 · 杜裕杰的软件柜</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 18px 16px 60px; max-width: 760px; margin-left: auto; margin-right: auto;
+    font-family: "Microsoft YaHei", -apple-system, "PingFang SC", sans-serif;
+    background: #0f1420; color: #dfe7f3; line-height: 1.85; font-size: 15px;
+  }
+  a { color: #7fa6e8; }
+  h1 { font-size: 21px; margin: 8px 0 4px; }
+  h2 { font-size: 16px; margin: 26px 0 8px; color: #9fc6ff; }
+  .sub { color: #8a93a5; font-size: 13px; margin-bottom: 18px; }
+  ul { padding-left: 22px; }
+  li { margin: 6px 0; }
+  .box { background: #151d2c; border: 1px solid #26324a; border-radius: 12px; padding: 12px 16px; margin: 14px 0; }
+  .back { display: inline-block; margin-bottom: 10px; color: #7fa6e8; text-decoration: none; font-size: 13px; }
+  table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 14px; }
+  th, td { border: 1px solid #26324a; padding: 8px 10px; text-align: left; vertical-align: top; }
+  th { background: #1a2232; }
+</style>
+</head>
+<body>
+
+<a class="back" href="index.html">‹ 返回软件柜</a>
+<h1>隐私政策</h1>
+<div class="sub">适用产品：杜裕杰的软件柜（网页版、安卓版、Windows 版）　最后更新：2026 年 11 月 25 日</div>
+
+<p>这个软件柜是我自己写的小工具合集（记账本、题库、小游戏等），不是商业公司的产品。下面把「会碰你哪些信息、放在哪、怎么删」说清楚，不写看不懂的法律套话。</p>
+
+<h2>一、会处理哪些信息</h2>
+<table>
+  <tr><th>信息</th><th>什么时候产生</th><th>用途</th></tr>
+  <tr>
+    <td>邮箱地址、昵称、头像（可选）</td>
+    <td>你主动注册 / 登录、在「我的」页面填资料时</td>
+    <td>登录账号、显示你的名字；邮箱不会公开给别人看</td>
+  </tr>
+  <tr>
+    <td>答题记录、错题、成绩、记账本条目</td>
+    <td>你做题、记账、玩游戏产生</td>
+    <td>让你换设备还能看到自己的进度；部分成绩会显示在排行榜中</td>
+  </tr>
+  <tr>
+    <td>象棋联网对局的房间号、走法、昵称</td>
+    <td>你使用「玩家 vs 玩家」房间对战时</td>
+    <td>让对手的棋盘和你同步</td>
+  </tr>
+  <tr>
+    <td>你主动发出的留言 / 好友申请</td>
+    <td>你使用交流功能时</td>
+    <td>把内容传达给你指定的人</td>
+  </tr>
+</table>
+
+<p><b>不会收集</b>：手机号、通讯录、短信、相册、精确位置、设备里的其他文件、剪贴板内容、广告标识符。软件里没有广告 SDK，也没有第三方统计 SDK。</p>
+
+<div class="box">
+  <b>本机也会存东西</b><br>
+  为了断网也能用，页面会把题库、游戏文件、登录状态存在你设备的浏览器缓存（含 localStorage）里；安卓版和 Windows 版用的是同一套网页，同样在本机缓存。这些数据只在你自己的设备上，卸载软件或在浏览器里清除站点数据就会消失。
+</div>
+
+<h2>二、信息存在哪里、谁能看见</h2>
+<ul>
+  <li>账号、成绩、记账、留言、棋局等云端数据存放在 <b>Supabase</b>（数据库服务商）的服务器上，通过加密连接（HTTPS）传输。</li>
+  <li>网页本身托管在 <b>GitHub Pages</b>，这部分是公开的静态页面，不含你的个人数据。</li>
+  <li>别人能看到的内容：排行榜里你的昵称和成绩、你发出的留言、你正在对局的象棋走法。<b>你的邮箱地址不会展示给其他用户。</b></li>
+  <li>开发者（杜裕杰）在维护服务时理论上能访问数据库中的记录，仅用于排查故障和清理垃圾数据，不会用于其他用途，也不会出售或提供给第三方。</li>
+</ul>
+
+<h2>三、信息的保存与删除</h2>
+<ul>
+  <li>只要账号还在，数据就会保留，方便你随时回来继续用。</li>
+  <li>想删除：在「我的」页面退出登录后，把需要删除的需求告诉开发者（见下方联系方式），我会在 7 个工作日内删除对应账号及关联数据。</li>
+  <li>不想登录也能用：题库、小游戏、单机象棋、人机对战都不需要账号，不登录就不会产生云端数据。</li>
+</ul>
+
+<h2>四、未成年人</h2>
+<p>软件不含付费、抽奖、陌生人社交推荐，适合学生用来刷题和记账。未满 14 周岁的使用者请在监护人指导下注册账号；监护人如发现孩子注册了账号并希望删除，可按上面的方式联系我删除。</p>
+
+<h2>五、权限说明（安卓版 / Windows 版）</h2>
+<ul>
+  <li><b>网络访问</b>：唯一必需的权限，用来打开网页、同步账号数据。断网时仍可使用已缓存的内容。</li>
+  <li>不申请通讯录、位置、相机、麦克风、短信、存储读写等权限。</li>
+  <li>Windows 版安装到当前用户目录，只在桌面和开始菜单创建快捷方式，并写入一条「程序和功能」里的卸载信息，不安装后台服务。</li>
+</ul>
+
+<h2>六、政策变更</h2>
+<p>如果以后新增会碰个人信息的功能（比如上传图片当头像、加好友聊天），我会先更新这一页再上线，页面顶部的「最后更新」日期会跟着变。</p>
+
+<h2>七、联系方式</h2>
+<div class="box">
+  开发者：杜裕杰<br>
+  项目主页：<a href="https://duyujie2005.github.io/my-apps/">https://duyujie2005.github.io/my-apps/</a><br>
+  代码仓库：<a href="https://github.com/duyujie2005/my-apps">github.com/duyujie2005/my-apps</a>（可在 Issues 里留言）<br>
+  数据删除 / 问题反馈：在代码仓库的 Issues 里提一条（<a href="https://github.com/duyujie2005/my-apps/issues">提交入口</a>），写明要删的账号昵称即可。
+</div>
+
+<p class="sub">这一页就是应用商店要求的「隐私政策」页面，页面地址：https://duyujie2005.github.io/my-apps/privacy.html</p>
+
+</body>
+</html>
