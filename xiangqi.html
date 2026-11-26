@@ -378,8 +378,9 @@
       el.status.innerHTML = "轮到你走：<b>" + (S.side === "r" ? "红方" : "黑方") + "</b>（两边都由你操作）";
     } else if (S.mode === "ai") {
       if (S.thinking) {
-        el.status.innerHTML = "电脑在想…<span style='opacity:.7'>第 " + (S.thinkDepth || 1) + " 层 · " +
-          Math.round((S.thinkNodes || 0) / 10000) + " 万局面</span>";
+        var n = S.thinkNodes || 0;
+        var ntxt = n >= 10000 ? Math.round(n / 10000) + " 万局面" : n + " 个局面";
+        el.status.innerHTML = "电脑在想…<span style='opacity:.7'>第 " + (S.thinkDepth || 1) + " 层 · " + ntxt + "</span>";
       } else {
         el.status.innerHTML = S.side === S.humanSide ? "轮到你走（你执<b>" + (S.humanSide === "r" ? "红" : "黑") + "</b>）"
           : "电脑走棋中…";
@@ -488,7 +489,8 @@
 
   function stopAI() {
     AIID++;
-    if (AIW) { try { AIW.terminate(); } catch (e) {} AIW = null; }
+    // 只有正在算的时候才真正杀掉线程；闲置时留着，下次直接用（省掉冷启动）
+    if (S.thinking && AIW) { try { AIW.terminate(); } catch (e) {} AIW = null; }
     S.thinking = false;
     S.thinkDepth = 0;
     S.thinkNodes = 0;
@@ -547,7 +549,7 @@
       w.postMessage({
         type: "go", id: AIID, fen: S.fen, side: S.side, level: S.level,
         repList: S.posHist.slice(-10),
-        msCap: S.history.length < 8 ? 1200 : 0     // 开局阶段不必长考，快点落子
+        msCap: S.history.length < 8 ? 800 : 0     // 开局阶段不必长考，快点落子
       });
     } catch (err) { AIW = null; aiFallback(); }
   }
@@ -866,6 +868,9 @@
   drawGrid();
   document.querySelector('.lv[data-lv="3"]').classList.add("pri");
   setMode("ai");
+
+  // 提前把 AI 线程拉起来（后台加载引擎），第一次走棋就不用等冷启动
+  setTimeout(function () { ensureWorker(); }, 700);
 
   // 提前把云端拉起来（supabase.js 108KB，早点下载，点按钮时就不用等）
   if (window.SYNC) {
