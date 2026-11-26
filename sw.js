@@ -1,6 +1,6 @@
 /* 杜裕杰的软件柜 · 离线缓存（Service Worker）
    策略：先用本地缓存立刻显示（几乎 0 延迟），同时后台悄悄下载最新版，下次打开就是新版。 */
-const CACHE = "shelf-v19";
+const CACHE = "shelf-v20";
 
 const FILES = [
   "./",

@@ -312,9 +312,11 @@
         if (p !== 0) { first = p; fxi = x; fyi = y; break; }
         x += dx; y += dy;
       }
-      if (first !== 0 && ((first > 0 ? 1 : -1) !== side)) {
+      if (first !== 0) {
         var ft = first > 0 ? first : -first;
-        if (ft === 5 || ft === 1) { return true; }
+        // 车/将 贴着这条线才算（将的照面另由 kingsFace 处理）
+        if (((first > 0 ? 1 : -1) !== side) && (ft === 5 || ft === 1)) { return true; }
+        // 炮：炮架可以是任何子（包括自己的士象），所以不管第一个子是谁，都要再看下一层
         x = fxi + dx; y = fyi + dy;
         while (inBoard(x, y)) {
           p = b[y * 9 + x];
@@ -426,39 +428,37 @@
   var MATE = 100000, INF = 200000;
   var nodes = 0, deadline = 0, stopped = false;
 
-  // 排序缓冲（模块级，嵌套调用安全：同一层只用一次）
-  var OC = new Int32Array(160), OS = new Int32Array(160), OK_ = new Int32Array(160), OR = new Int32Array(160);
-
+  // 排序：TT 着法 → 杀手 → 吃子（按被吃子等级降序）→ 其余
+  // 直接在 buf 内原地分区，不再分配临时数组（这是每节点都跑的热路径）
   function orderMoves(size, mvTT, ply) {
-    var buf = gbuf[ply];
-    var k0 = killer[ply * 2], k1 = killer[ply * 2 + 1];
-    var ncap = 0, nkill = 0, nrest = 0, i, m, to, cap, pi;
-    for (i = 0; i < size; i++) {
-      m = buf[i];
-      if (mvTT && m === mvTT) { continue; }
-      to = ((m >> 12) & 15) * 9 + ((m >> 8) & 15);
-      cap = BB[to];
-      if (cap !== 0) {
-        pi = cap > 0 ? cap - 1 : 6 - cap;
-        var fp = BB[((m >> 4) & 15) * 9 + (m & 15)];
-        OC[ncap] = m;
-        OS[ncap] = MAT[pi] * 32 - MAT[fp > 0 ? fp - 1 : 6 - fp];
-        ncap++;
-      } else if (m === k0 || m === k1) { OK_[nkill++] = m; }
-      else { OR[nrest++] = m; }
+    var buf = gbuf[ply], k0 = killer[ply * 2], k1 = killer[ply * 2 + 1];
+    var n = 0, i, j, t, to, cap, sc, bs, bi;
+
+    if (mvTT) {
+      for (i = 0; i < size; i++) { if (buf[i] === mvTT) { t = buf[0]; buf[0] = buf[i]; buf[i] = t; break; } }
+      n = 1;
     }
-    // 吃子按 MVV-LVA 插入排序
-    for (i = 1; i < ncap; i++) {
-      var v = OC[i], s = OS[i], j = i - 1;
-      while (j >= 0 && OS[j] < s) { OC[j + 1] = OC[j]; OS[j + 1] = OS[j]; j--; }
-      OC[j + 1] = v; OS[j + 1] = s;
+    for (j = 0; j < 2; j++) {
+      var kk = j === 0 ? k0 : k1;
+      if (!kk) { continue; }
+      for (i = n; i < size; i++) { if (buf[i] === kk) { t = buf[n]; buf[n] = buf[i]; buf[i] = t; n++; break; } }
     }
-    var n = 0;
-    if (mvTT) { buf[n++] = mvTT; }
-    for (i = 0; i < nkill; i++) { buf[n++] = OK_[i]; }
-    for (i = 0; i < ncap; i++) { buf[n++] = OC[i]; }
-    for (i = 0; i < nrest; i++) { buf[n++] = OR[i]; }
-    return n;
+    var capStart = n;
+    for (i = n; i < size; i++) {
+      to = ((buf[i] >> 12) & 15) * 9 + ((buf[i] >> 8) & 15);
+      if (BB[to] !== 0) { t = buf[n]; buf[n] = buf[i]; buf[i] = t; n++; }
+    }
+    for (i = capStart; i < n - 1; i++) {
+      bi = i; bs = -1;
+      for (j = i; j < n; j++) {
+        to = ((buf[j] >> 12) & 15) * 9 + ((buf[j] >> 8) & 15);
+        cap = BB[to];
+        sc = cap > 0 ? cap : -cap;
+        if (sc > bs) { bs = sc; bi = j; }
+      }
+      if (bi !== i) { t = buf[i]; buf[i] = buf[bi]; buf[bi] = t; }
+    }
+    return size;
   }
 
   // ---------------- 静态搜索 --------------
@@ -479,7 +479,7 @@
       var mv = gbuf[ply][k];
       var to = ((mv >> 12) & 15) * 9 + ((mv >> 8) & 15);
       var cap = BB[to];
-      if (cap === 0) { continue; }
+      if (cap === 0) { break; }
       if (cap === 1 || cap === -1) { return MATE - ply; }
       makeI(ply, mv);
       if (kingsFace()) { unmakeI(ply, mv); continue; }
@@ -524,7 +524,7 @@
     if (ply >= MAXPLY - 4) { return TURN * EV; }
 
     pathHash[ply] = HLO;
-    for (var r = ply - 2; r >= 0 && r >= ply - 24; r -= 2) {
+    for (var r = ply - 2; r >= 0 && r >= ply - 16; r -= 2) {
       if (pathHash[r] === HLO) { return 0; }
     }
 
@@ -544,9 +544,9 @@
     if (depth <= 0) { return qsearch(alpha, beta, ply); }
 
     var inChk = 0;
-    if (depth >= 3) { inChk = inCheckI(TURN) ? 1 : 0; }
+    if (depth >= 5) { inChk = inCheckI(TURN) ? 1 : 0; }
 
-    if (depth >= 3 && !inChk && ply > 0 && alpha > -MATE + 2000 && beta < MATE - 2000) {
+    if (depth >= 5 && !inChk && ply > 0 && alpha > -MATE + 2000 && beta < MATE - 2000) {
       TURN = -TURN; HLO ^= ZTL; HHI ^= ZTH;
       var nv = -negamax(depth - 3, -beta, -beta + 1, ply + 1);
       HLO ^= ZTL; HHI ^= ZTH; TURN = -TURN;
@@ -574,7 +574,7 @@
       if (legal === 1) {
         v = -negamax(depth - 1, -beta, -alpha, ply + 1);
       } else {
-        var reduce = (depth >= 3 && legal > 3 && cap === 0 && !inChk) ? 1 : 0;
+        var reduce = (depth >= 4 && legal > 3 && cap === 0) ? 1 : 0;
         v = -negamax(depth - 1 - reduce, -alpha - 1, -alpha, ply + 1);
         if (!stopped && v > alpha && v < beta) {
           v = -negamax(depth - 1, -beta, -alpha, ply + 1);
@@ -604,11 +604,13 @@
     if (legal === 0) { return -MATE + ply; }
 
     if (best > -MATE + 1000 && best < MATE - 1000) {
-      ttKey[tti] = HHI;
-      ttDepth[tti] = depth + 1;
-      ttFlag[tti] = best <= origAlpha ? 3 : (best >= beta ? 2 : 1);
-      ttVal[tti] = best;
-      ttMv[tti] = bestMv;
+      if (ttKey[tti] !== HHI || ttDepth[tti] <= depth + 1) {
+        ttKey[tti] = HHI;
+        ttDepth[tti] = depth + 1;
+        ttFlag[tti] = best <= origAlpha ? 3 : (best >= beta ? 2 : 1);
+        ttVal[tti] = best;
+        ttMv[tti] = bestMv;
+      }
     }
     return best;
   }
@@ -631,15 +633,15 @@
 
   var LEVELS = [
     null,
-    { name: "入门", depth: 2, ms: 200, noise: 700 },
-    { name: "简单", depth: 3, ms: 600, noise: 260 },
-    { name: "普通", depth: 5, ms: 1200, noise: 70 },
-    { name: "困难", depth: 10, ms: 2400, noise: 0 },
-    { name: "大师", depth: 14, ms: 4500, noise: 0 },
-    { name: "超强", depth: 20, ms: 8000, noise: 0 }
+    { name: "入门", depth: 2, ms: 150, noise: 700 },
+    { name: "简单", depth: 4, ms: 300, noise: 260 },
+    { name: "普通", depth: 6, ms: 700, noise: 70 },
+    { name: "困难", depth: 10, ms: 1200, noise: 0 },
+    { name: "大师", depth: 14, ms: 1800, noise: 0 },
+    { name: "超强", depth: 20, ms: 3000, noise: 0 }
   ];
 
-  function think(fen, side, level, onInfo, repList) {
+  function think(fen, side, level, onInfo, repList, msCap) {
     var cfg = LEVELS[level] || LEVELS[3];
     var bi = toInt(parseFEN(fen));
     loadPos(bi);
@@ -647,7 +649,8 @@
     hashPos();
     if (TURN < 0) { HLO ^= ZTL; HHI ^= ZTH; }
     nodes = 0; stopped = false;
-    deadline = Date.now() + cfg.ms;
+    var budget = (msCap && msCap < cfg.ms) ? msCap : cfg.ms;
+    deadline = Date.now() + budget;
     for (var i = 0; i < MAXPLY * 2; i++) { killer[i] = 0; }
 
     var t0 = Date.now();

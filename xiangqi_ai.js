@@ -11,7 +11,7 @@ self.onmessage = function (e) {
         type: "info", id: d.id, depth: info.depth,
         score: info.score, nodes: info.nodes, ms: info.ms
       });
-    }, d.repList || null);
+    }, d.repList || null, d.msCap || 0);
     self.postMessage({ type: "move", id: d.id, mv: res, ms: Date.now() - t0 });
   } catch (err) {
     self.postMessage({ type: "error", id: d.id, msg: String((err && err.message) || err) });

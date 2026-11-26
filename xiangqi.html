@@ -253,6 +253,9 @@
     posHist: [],             // 最近的局面 FEN，给引擎做重复局面惩罚
     thinkDepth: 0,
     thinkNodes: 0,
+    mustPick: false,         // 人机模式：还没选难度，棋盘先锁住
+    check: false,            // 当前走方是否正被将军
+    curMoves: [],            // 选中棋子的合法走法
     pollTimer: null,
     lastStamp: ""
   };
@@ -310,6 +313,9 @@
     var olds = el.inner.querySelectorAll(".piece,.hint");
     for (var i = 0; i < olds.length; i++) { olds[i].remove(); }
 
+    // 当前这一方是不是正被将军（红黑都算，状态条要提示）
+    S.check = !S.over && XQ.inCheck(b, S.side);
+
     for (var y = 0; y < 10; y++) {
       for (var x = 0; x < 9; x++) {
         var pc = b[XQ.idx(x, y)];
@@ -327,11 +333,12 @@
     }
 
     // 可走点
+    S.curMoves = [];
     if (S.selected && !S.over && canPlay()) {
-      var ms = XQ.legalMoves(b, S.side).filter(function (m) {
+      S.curMoves = XQ.legalMoves(b, S.side).filter(function (m) {
         return m.fx === S.selected.x && m.fy === S.selected.y;
       });
-      ms.forEach(function (m) {
+      S.curMoves.forEach(function (m) {
         var h = document.createElement("div");
         h.className = "hint" + (m.cap ? " cap" : "");
         h.style.cssText = posStyle(m.tx, m.ty);
@@ -359,6 +366,14 @@
 
   function updateStatus() {
     if (S.over) { el.status.innerHTML = "<b>" + S.result + "</b>"; return; }
+    if (S.mustPick) { el.status.innerHTML = "先选一个难度，点完立刻开局"; return; }
+    if (S.check) {
+      var who = (S.mode !== "ai" || S.side === S.humanSide) ? "你" : "电脑";
+      var tag = (S.mode !== "ai" || S.side === S.humanSide) ? "<b style='color:#ff6b6b'>⚠ " + who + "被将军了</b>" : "⚠ " + who + "被将军了";
+      var tail = (S.mode !== "ai" || S.side === S.humanSide) ? "——必须先把将应掉（挪将 / 垫子 / 吃掉将军的子）" : "——正在应将";
+      el.status.innerHTML = tag + " <span style='opacity:.75'>" + tail + "</span>";
+      return;
+    }
     if (S.mode === "self") {
       el.status.innerHTML = "轮到你走：<b>" + (S.side === "r" ? "红方" : "黑方") + "</b>（两边都由你操作）";
     } else if (S.mode === "ai") {
@@ -380,7 +395,7 @@
   }
 
   function canPlay() {
-    if (S.over) { return false; }
+    if (S.over || S.mustPick) { return false; }
     if (S.mode === "self") { return true; }
     if (S.mode === "ai") { return S.side === S.humanSide && !S.thinking; }
     if (S.mode === "online") { return !!S.myColor && S.rivalArrived && S.side === S.myColor; }
@@ -411,6 +426,36 @@
     if (!ms.length) { return; }
     doMove(b, ms[0], true);
   }
+
+  // 点到走不到的位置 → 说明原因，别让人以为是"点了没反应"
+  el.inner.addEventListener("pointerdown", function (e) {
+    var tg = e.target;
+    if (tg && tg.classList && (tg.classList.contains("piece") || tg.classList.contains("hint"))) { return; }
+    if (!S.selected || !canPlay()) { return; }
+    var r = el.inner.getBoundingClientRect();
+    if (!r.width || !r.height) { return; }
+    var gx = Math.round((e.clientX - r.left) / (r.width / 8));
+    var gy = Math.round((e.clientY - r.top) / (r.height / 9));
+    if (gx < 0 || gx > 8 || gy < 0 || gy > 9) { return; }
+    for (var i = 0; i < S.curMoves.length; i++) {
+      if (S.curMoves[i].tx === gx && S.curMoves[i].ty === gy) { return; }
+    }
+    var b = XQ.parseFEN(S.fen);
+    var pseudo = XQ.genMoves(b, S.side).filter(function (m) {
+      return m.fx === S.selected.x && m.fy === S.selected.y && m.tx === gx && m.ty === gy;
+    });
+    if (!pseudo.length) {
+      el.hintText.textContent = "这个子走不到那个位置";
+      return;
+    }
+    var bb = XQ.parseFEN(S.fen);
+    XQ.make(bb, pseudo[0]);
+    if (XQ.inCheck(bb, S.side)) {
+      el.hintText.textContent = S.check ? "这步不行——你还被将军，走完老将还是会被吃" : "这步不行——走完老将会被将军";
+    } else {
+      el.hintText.textContent = "这步不行——走完两边老将会照面（同一条线上中间没有子）";
+    }
+  }, true);
 
   function doMove(b, mv, writeBack) {
     var text = XQ.moveText(b, mv);
@@ -501,7 +546,8 @@
     try {
       w.postMessage({
         type: "go", id: AIID, fen: S.fen, side: S.side, level: S.level,
-        repList: S.posHist.slice(-10)
+        repList: S.posHist.slice(-10),
+        msCap: S.history.length < 8 ? 1200 : 0     // 开局阶段不必长考，快点落子
       });
     } catch (err) { AIW = null; aiFallback(); }
   }
@@ -656,6 +702,7 @@
   function setMode(m) {
     S.mode = m;
     S.selected = null;
+    S.mustPick = false;
     if (S.mode !== "online") { stopPoll(); if (S.room) { leaveRoomSilently(); } }
     el.aiOpts.style.display = m === "ai" ? "block" : "none";
     el.onlineOpts.style.display = m === "online" ? "block" : "none";
@@ -663,7 +710,12 @@
     document.querySelectorAll(".modes button").forEach(function (b) {
       b.classList.toggle("on", b.dataset.mode === m);
     });
-    if (m === "ai") { reset(); if (S.humanSide === "b") { aiTurn(); } }
+    if (m === "ai") {
+      S.mustPick = true;
+      reset();
+      openPanel(true);
+      el.hintText.textContent = "先选个难度，点一下就开始";
+    }
     else if (m === "self") { reset(); }
     else { reset(); el.hintText.textContent = "建房间，或输入 6 位房间号加入"; }
     render();
@@ -764,6 +816,13 @@
       S.level = parseInt(b.dataset.lv, 10);
       document.querySelectorAll(".lv").forEach(function (o) { o.classList.toggle("pri", o === b); });
       el.hintText.textContent = "难度：" + b.textContent;
+      if (S.mode === "ai" && (S.mustPick || S.history.length === 0)) {
+        S.mustPick = false;
+        reset();
+        openPanel(false);
+        el.hintText.textContent = "难度：" + b.textContent + "，开局";
+        if (S.humanSide === "b") { aiTurn(); }
+      }
     });
   });
 
@@ -781,7 +840,10 @@
       if (!S.myColor) { return; }
       S.fen = START; S.side = "r"; S.history = []; S.over = false; S.result = ""; S.lastMove = null;
       render(); pushOnline();
-    } else { reset(); if (S.mode === "ai" && S.humanSide === "b") { aiTurn(); } }
+    } else {
+      if (S.mode === "ai" && S.mustPick) { openPanel(true); el.hintText.textContent = "先选个难度，点一下难度按钮就开局"; return; }
+      reset(); if (S.mode === "ai" && S.humanSide === "b") { aiTurn(); }
+    }
   });
   el.undoBtn.addEventListener("click", undo);
   el.resignBtn.addEventListener("click", function () {
