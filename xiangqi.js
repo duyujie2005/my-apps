@@ -1,23 +1,40 @@
-/* 中国象棋引擎（纯逻辑，不碰页面）
+/* 中国象棋引擎 v3（纯逻辑，不碰页面）
    棋盘 9×10，坐标 x 0..8（左→右），y 0..9（上→下）；黑方在上（y0-2 家），红方在下（y7-9 家）
-   棋子：大写=红方 K帅 A仕 B相 N马 R车 C炮 P兵；小写=黑方 k将 a士 b象 n马 r车 c炮 p卒 */
+   内部用整数表示棋子：红 1..7 = K A B N R C P；黑 -1..-7；0 空
+   对外的 parseFEN / legalMoves / make 仍按字符数组工作，兼容旧页面与旧测试 */
 (function (g) {
+  "use strict";
+
   var START_FEN = "rnbakabnr/9/1c5c1/p1p1p1p1p/9/9/P1P1P1P1P/1C5C1/9/RNBAKABNR";
 
+  // ---------------- 基础 ----------------
   function idx(x, y) { return y * 9 + x; }
   function inBoard(x, y) { return x >= 0 && x < 9 && y >= 0 && y < 10; }
-  function isRed(p) { return p >= "A" && p <= "Z"; }
-  function sideOf(p) { return isRed(p) ? "r" : "b"; }
   function other(s) { return s === "r" ? "b" : "r"; }
-  function isEnemy(a, b) { return !!a && !!b && sideOf(a) !== sideOf(b); }
+
+  var CHMAP = { K: 1, A: 2, B: 3, N: 4, R: 5, C: 6, P: 7, k: -1, a: -2, b: -3, n: -4, r: -5, c: -6, p: -7 };
+  var CHARR = "KABNRCP", CHARRB = "kabnrcp";
+
+  function codeOf(ch) { return CHMAP[ch] || 0; }
+  function charOf(p) {
+    if (!p) { return ""; }
+    return p > 0 ? CHARR.charAt(p - 1) : CHARRB.charAt(-p - 1);
+  }
+  function pindex(p) { return p > 0 ? p - 1 : 6 - p; }
+
+  function isRed(p) {
+    if (typeof p === "number") { return p > 0; }
+    return !!p && p >= "A" && p <= "Z";
+  }
+  function sideOf(p) { return isRed(p) ? "r" : "b"; }
 
   function parseFEN(fen) {
     var b = new Array(90).fill("");
     var rows = (fen || START_FEN).split(" ")[0].split("/");
     for (var y = 0; y < rows.length && y < 10; y++) {
-      var x = 0;
-      for (var i = 0; i < rows[y].length; i++) {
-        var ch = rows[y][i];
+      var x = 0, row = rows[y];
+      for (var i = 0; i < row.length; i++) {
+        var ch = row.charAt(i);
         if (ch >= "1" && ch <= "9") { x += parseInt(ch, 10); }
         else { if (x < 9) { b[idx(x, y)] = ch; } x++; }
       }
@@ -25,14 +42,24 @@
     return b;
   }
 
+  function toInt(bChar) {
+    var a = new Int8Array(90);
+    for (var i = 0; i < 90; i++) {
+      var ch = bChar[i];
+      a[i] = ch ? (CHMAP[ch] || 0) : 0;
+    }
+    return a;
+  }
+
   function toFEN(b, side) {
-    var rows = [];
+    var rows = [], isInt = (typeof b[0] === "number");
     for (var y = 0; y < 10; y++) {
       var s = "", empty = 0;
       for (var x = 0; x < 9; x++) {
         var p = b[idx(x, y)];
-        if (!p) { empty++; }
-        else { if (empty) { s += empty; empty = 0; } s += p; }
+        var ch = isInt ? charOf(p) : (p || "");
+        if (!ch) { empty++; }
+        else { if (empty) { s += empty; empty = 0; } s += ch; }
       }
       if (empty) { s += empty; }
       rows.push(s);
@@ -40,155 +67,18 @@
     return rows.join("/") + " " + (side || "r") + " - - 0 1";
   }
 
-  function findKing(b, side) {
+  function findKing(bChar, side) {
     var k = side === "r" ? "K" : "k";
-    for (var y = 0; y < 10; y++) { for (var x = 0; x < 9; x++) { if (b[idx(x, y)] === k) { return { x: x, y: y }; } } }
+    for (var y = 0; y < 10; y++) { for (var x = 0; x < 9; x++) { if (bChar[idx(x, y)] === k) { return { x: x, y: y }; } } }
     return null;
   }
 
-  function inPalace(x, y, side) {
+  function inPalace(x, y, red) {
     if (x < 3 || x > 5) { return false; }
-    return side === "r" ? (y >= 7 && y <= 9) : (y >= 0 && y <= 2);
+    return red ? (y >= 7 && y <= 9) : (y >= 0 && y <= 2);
   }
 
-  // 伪合法走法（不考虑自己被将军）
-  function genMoves(b, side) {
-    var out = [];
-    function push(fx, fy, tx, ty) {
-      if (!inBoard(tx, ty)) { return; }
-      var t = b[idx(tx, ty)];
-      if (t && sideOf(t) === side) { return; }
-      out.push({ fx: fx, fy: fy, tx: tx, ty: ty, cap: t || "" });
-    }
-    for (var y = 0; y < 10; y++) {
-      for (var x = 0; x < 9; x++) {
-        var p = b[idx(x, y)];
-        if (!p || sideOf(p) !== side) { continue; }
-        var t = p.toUpperCase();
-        if (t === "K") {
-          var dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];
-          for (var i = 0; i < 4; i++) {
-            var nx = x + dirs[i][0], ny = y + dirs[i][1];
-            if (inPalace(nx, ny, side)) { push(x, y, nx, ny); }
-          }
-        } else if (t === "A") {
-          var dd = [[-1, -1], [-1, 1], [1, -1], [1, 1]];
-          for (var j = 0; j < 4; j++) {
-            var ax = x + dd[j][0], ay = y + dd[j][1];
-            if (inPalace(ax, ay, side)) { push(x, y, ax, ay); }
-          }
-        } else if (t === "B") {
-          var bd = [[-2, -2], [-2, 2], [2, -2], [2, 2]];
-          for (var k = 0; k < 4; k++) {
-            var bx = x + bd[k][0], by = y + bd[k][1];
-            if (!inBoard(bx, by)) { continue; }
-            if (side === "r" ? by < 5 : by > 4) { continue; }            // 象不过河
-            if (b[idx(x + bd[k][0] / 2, y + bd[k][1] / 2)]) { continue; }  // 塞象眼
-            push(x, y, bx, by);
-          }
-        } else if (t === "N") {
-          var nd = [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]];
-          for (var m = 0; m < 8; m++) {
-            var hx = x + nd[m][0], hy = y + nd[m][1];
-            var lx = x + (Math.abs(nd[m][0]) === 2 ? nd[m][0] / 2 : 0);
-            var ly = y + (Math.abs(nd[m][1]) === 2 ? nd[m][1] / 2 : 0);
-            if (b[idx(lx, ly)]) { continue; }                            // 蹩马腿
-            push(x, y, hx, hy);
-          }
-        } else if (t === "R") {
-          var rd = [[0, -1], [0, 1], [-1, 0], [1, 0]];
-          for (var r = 0; r < 4; r++) {
-            var rx = x + rd[r][0], ry = y + rd[r][1];
-            while (inBoard(rx, ry)) {
-              var rp = b[idx(rx, ry)];
-              if (!rp) { push(x, y, rx, ry); }
-              else { if (sideOf(rp) !== side) { push(x, y, rx, ry); } break; }
-              rx += rd[r][0]; ry += rd[r][1];
-            }
-          }
-        } else if (t === "C") {
-          var cd = [[0, -1], [0, 1], [-1, 0], [1, 0]];
-          for (var c = 0; c < 4; c++) {
-            var cx = x + cd[c][0], cy = y + cd[c][1];
-            var screen = false;
-            while (inBoard(cx, cy)) {
-              var cp = b[idx(cx, cy)];
-              if (!screen) {
-                if (!cp) { push(x, y, cx, cy); }
-                else { screen = true; }
-              } else if (cp) {
-                if (sideOf(cp) !== side) { push(x, y, cx, cy); }
-                break;
-              }
-              cx += cd[c][0]; cy += cd[c][1];
-            }
-          }
-        } else if (t === "P") {
-          var fy2 = side === "r" ? -1 : 1;
-          push(x, y, x, y + fy2);
-          var crossed = side === "r" ? y <= 4 : y >= 5;
-          if (crossed) { push(x, y, x - 1, y); push(x, y, x + 1, y); }
-        }
-      }
-    }
-    return out;
-  }
-
-  // 我这一方被将军了吗（含将帅照面）
-  function inCheck(b, side) {
-    var k = findKing(b, side);
-    if (!k) { return false; }
-    var kx = k.x, ky = k.y, opp = other(side);
-    // 直线：车 / 将帅照面 / 炮
-    var dirs = [[0, -1], [0, 1], [-1, 0], [1, 0]];
-    for (var d = 0; d < 4; d++) {
-      var x = kx + dirs[d][0], y = ky + dirs[d][1], first = null, firstX = -1, firstY = -1;
-      while (inBoard(x, y)) {
-        var p = b[idx(x, y)];
-        if (p) { first = p; firstX = x; firstY = y; break; }
-        x += dirs[d][0]; y += dirs[d][1];
-      }
-      if (first && sideOf(first) === opp) {
-        var fu = first.toUpperCase();
-        if (fu === "R" || fu === "K") { return true; }
-      }
-      if (first) {
-        x = firstX + dirs[d][0]; y = firstY + dirs[d][1];
-        while (inBoard(x, y)) {
-          var p2 = b[idx(x, y)];
-          if (p2) {
-            if (sideOf(p2) === opp && p2.toUpperCase() === "C") { return true; }
-            break;
-          }
-          x += dirs[d][0]; y += dirs[d][1];
-        }
-      }
-    }
-    // 马
-    var nd = [[1, 2], [2, 1], [2, -1], [1, -2], [-1, -2], [-2, -1], [-2, 1], [-1, 2]];
-    for (var n = 0; n < 8; n++) {
-      var nx = kx + nd[n][0], ny = ky + nd[n][1];
-      if (!inBoard(nx, ny)) { continue; }
-      var np = b[idx(nx, ny)];
-      if (!np || sideOf(np) !== opp || np.toUpperCase() !== "N") { continue; }
-      var lx = nx + (Math.abs(nd[n][0]) === 2 ? -nd[n][0] / 2 : 0);
-      var ly = ny + (Math.abs(nd[n][1]) === 2 ? -nd[n][1] / 2 : 0);
-      if (!b[idx(lx, ly)]) { return true; }
-    }
-    // 兵/卒（黑兵往下走、红兵往上走）
-    var px = kx, py = ky + (side === "r" ? -1 : 1);
-    if (inBoard(px, py) && b[idx(px, py)] && sideOf(b[idx(px, py)]) === opp && b[idx(px, py)].toUpperCase() === "P") { return true; }
-    var sideY = [kx - 1, kx + 1];
-    for (var s2 = 0; s2 < 2; s2++) {
-      var sx = sideY[s2], sy = ky;
-      if (inBoard(sx, sy) && b[idx(sx, sy)] && sideOf(b[idx(sx, sy)]) === opp && b[idx(sx, sy)].toUpperCase() === "P") {
-        var crossedEnemy = opp === "r" ? sy <= 4 : sy >= 5;
-        if (crossedEnemy) { return true; }
-      }
-    }
-    return false;
-  }
-
+  // 字符版 make/unmake（页面走棋用）
   function make(b, mv) {
     var cap = b[idx(mv.tx, mv.ty)];
     b[idx(mv.tx, mv.ty)] = b[idx(mv.fx, mv.fy)];
@@ -201,106 +91,664 @@
     b[idx(mv.tx, mv.ty)] = mv.cap || "";
   }
 
-  // 真正合法走法（走完不能自己被将军 / 不能将帅照面）
-  function legalMoves(b, side) {
-    var all = genMoves(b, side), out = [];
-    for (var i = 0; i < all.length; i++) {
-      make(b, all[i]);
-      var bad = inCheck(b, side);
-      unmake(b, all[i]);
-      if (!bad) { out.push(all[i]); }
+  // ---------------- 局面状态（搜索用） ----------------
+  var BB = new Int8Array(90);
+  var KPOS = new Int32Array(2);          // [0]=红王格子, [1]=黑王格子
+  var TURN = 1;
+  var EV = 0;                            // 红方视角的静态评估，增量维护
+  var XT = new Int8Array(90), YT = new Int8Array(90);
+  (function () { for (var i = 0; i < 90; i++) { XT[i] = i % 9; YT[i] = (i - i % 9) / 9; } })();
+
+  function kingIdx(b, sgn) {
+    var t = sgn > 0 ? 1 : -1;
+    for (var i = 0; i < 90; i++) { if (b[i] === t) { return i; } }
+    return -1;
+  }
+
+  function loadPos(bi) {
+    BB.set(bi);
+    KPOS[0] = kingIdx(BB, 1);
+    KPOS[1] = kingIdx(BB, -1);
+    var s = 0, i, p, pi, sg;
+    for (i = 0; i < 90; i++) {
+      p = BB[i];
+      if (p !== 0) {
+        pi = p > 0 ? p - 1 : 6 - p;
+        sg = p > 0 ? 1 : -1;
+        s += sg * (MAT[pi] + PST[i * 14 + pi]);
+      }
     }
-    return out;
+    EV = s;
   }
 
-  function gameOver(b, side) {
-    var mv = legalMoves(b, side);
-    if (!mv.length) { return { over: true, winner: other(side), reason: inCheck(b, side) ? "将死" : "困毙" }; }
-    return { over: false };
+  function kingsFace() {
+    var a = KPOS[0], c = KPOS[1];
+    if (a < 0 || c < 0) { return false; }
+    if ((a % 9) !== (c % 9)) { return false; }
+    var lo = a < c ? a : c, hi = a < c ? c : a;
+    for (var i = lo + 9; i < hi; i += 9) { if (BB[i] !== 0) { return false; } }
+    return true;
   }
 
-  // ---------------- 评估 ----------------
-  var VAL = { K: 10000, R: 900, C: 450, N: 400, B: 200, A: 200, P: 100 };
-  function evalRed(b) {
-    var s = 0;
-    for (var y = 0; y < 10; y++) {
-      for (var x = 0; x < 9; x++) {
-        var p = b[idx(x, y)];
-        if (!p) { continue; }
-        var t = p.toUpperCase(), v = VAL[t] || 0, sign = isRed(p) ? 1 : -1;
-        if (t === "P") {
-          var crossed = isRed(p) ? y <= 4 : y >= 5;
-          v = crossed ? 190 : 100;
-          if (crossed) { v += (isRed(p) ? (5 - y) : (y - 5)) * 8; }
+  // 着法编码：fx | fy<<4 | tx<<8 | ty<<12
+  function enc(fx, fy, tx, ty) { return fx | (fy << 4) | (tx << 8) | (ty << 12); }
+
+  // 走一步（int 棋盘），返回被吃子；hash / 王位置 / 评估同步更新，轮走方不切换
+  var STK = new Int8Array(80);
+  function makeI(ply, mv) {
+    var fx = mv & 15, fy = (mv >> 4) & 15, tx = (mv >> 8) & 15, ty = (mv >> 12) & 15;
+    var from = fy * 9 + fx, to = ty * 9 + tx;
+    var pc = BB[from], cap = BB[to], pi = pc > 0 ? pc - 1 : 6 - pc;
+    STK[ply] = cap;
+    BB[to] = pc; BB[from] = 0;
+    if (pc === 1) { KPOS[0] = to; } else if (pc === -1) { KPOS[1] = to; }
+    var zf = from * 14 + pi, zt = to * 14 + pi;
+    HLO ^= ZL[zf] ^ ZL[zt]; HHI ^= ZH[zf] ^ ZH[zt];
+    var sg = pc > 0 ? 1 : -1;
+    EV -= sg * (MAT[pi] + PST[from * 14 + pi]);
+    EV += sg * (MAT[pi] + PST[to * 14 + pi]);
+    if (cap) {
+      var ci = cap > 0 ? cap - 1 : 6 - cap;
+      var zc = to * 14 + ci;
+      HLO ^= ZL[zc]; HHI ^= ZH[zc];
+      EV -= (cap > 0 ? 1 : -1) * (MAT[ci] + PST[to * 14 + ci]);
+    }
+    return cap;
+  }
+
+  function unmakeI(ply, mv) {
+    var fx = mv & 15, fy = (mv >> 4) & 15, tx = (mv >> 8) & 15, ty = (mv >> 12) & 15;
+    var from = fy * 9 + fx, to = ty * 9 + tx;
+    var pc = BB[to], cap = STK[ply], pi = pc > 0 ? pc - 1 : 6 - pc;
+    BB[from] = pc; BB[to] = cap;
+    if (pc === 1) { KPOS[0] = from; } else if (pc === -1) { KPOS[1] = from; }
+    var zf = from * 14 + pi, zt = to * 14 + pi;
+    HLO ^= ZL[zf] ^ ZL[zt]; HHI ^= ZH[zf] ^ ZH[zt];
+    var sg = pc > 0 ? 1 : -1;
+    EV += sg * (MAT[pi] + PST[from * 14 + pi]);
+    EV -= sg * (MAT[pi] + PST[to * 14 + pi]);
+    if (cap) {
+      var ci = cap > 0 ? cap - 1 : 6 - cap;
+      var zc = to * 14 + ci;
+      HLO ^= ZL[zc]; HHI ^= ZH[zc];
+      EV += (cap > 0 ? 1 : -1) * (MAT[ci] + PST[to * 14 + ci]);
+    }
+  }
+
+  // ---------------- Zobrist --------------
+  var ZL = new Int32Array(14 * 90), ZH = new Int32Array(14 * 90);
+  var ZTL = 0, ZTH = 0, HLO = 0, HHI = 0;
+  (function () {
+    var seed = 20260101;
+    function rnd() {
+      seed ^= seed << 13; seed ^= seed >> 17; seed ^= seed << 5; seed = seed | 0;
+      return seed;
+    }
+    for (var i = 0; i < ZL.length; i++) { ZL[i] = rnd(); ZH[i] = rnd(); }
+    ZTL = rnd(); ZTH = rnd();
+  })();
+
+  function hashPos() {
+    var lo = 0, hi = 0;
+    for (var i = 0; i < 90; i++) {
+      var p = BB[i];
+      if (p) { var k = i * 14 + pindex(p); lo ^= ZL[k]; hi ^= ZH[k]; }
+    }
+    HLO = lo; HHI = hi;
+  }
+
+  // ---------------- 着法生成 ----------------
+  var KD = [0, 0, -1, 1], KE = [-1, 1, 0, 0];
+  var KAD = [-1, -1, 1, 1], KAE = [-1, 1, -1, 1];
+  var KBD = [-2, -2, 2, 2], KBE = [-2, 2, -2, 2];
+  var KND = [1, 2, 2, 1, -1, -2, -2, -1], KNE = [2, 1, -1, -2, -2, -1, 1, 2];
+
+  function gen(side, buf, capsOnly) {
+    var n = 0, red = side > 0, b = BB;
+    for (var from = 0; from < 90; from++) {
+      var pc = b[from];
+      if (pc === 0) { continue; }
+      if (red) { if (pc < 0) { continue; } } else { if (pc > 0) { continue; } }
+      var x = XT[from], y = YT[from], t = pc > 0 ? pc : -pc, i, d, nx, ny, tp;
+
+      if (t === 1) {
+        var y0 = red ? 7 : 0, y1 = red ? 9 : 2;
+        for (d = 0; d < 4; d++) {
+          nx = x + KD[d]; ny = y + KE[d];
+          if (nx < 3 || nx > 5 || ny < y0 || ny > y1) { continue; }
+          tp = b[ny * 9 + nx];
+          if (tp !== 0 && ((tp > 0) === red)) { continue; }
+          if (capsOnly && tp === 0) { continue; }
+          buf[n++] = enc(x, y, nx, ny);
         }
-        // 马炮往中路和过河靠：给一点点位置分
-        if (t === "N" || t === "C") { v += (4 - Math.abs(x - 4)) * 6; }
-        if (t === "R") { v += (4 - Math.abs(x - 4)) * 3; }
-        s += sign * v * 1.0;
+      } else if (t === 2) {
+        for (d = 0; d < 4; d++) {
+          nx = x + KAD[d]; ny = y + KAE[d];
+          if (!inPalace(nx, ny, red)) { continue; }
+          tp = b[ny * 9 + nx];
+          if (tp !== 0 && ((tp > 0) === red)) { continue; }
+          if (capsOnly && tp === 0) { continue; }
+          buf[n++] = enc(x, y, nx, ny);
+        }
+      } else if (t === 3) {
+        for (d = 0; d < 4; d++) {
+          nx = x + KBD[d]; ny = y + KBE[d];
+          if (!inBoard(nx, ny)) { continue; }
+          if (red ? ny < 5 : ny > 4) { continue; }
+          if (b[(y + KBE[d] / 2) * 9 + (x + KBD[d] / 2)] !== 0) { continue; }
+          tp = b[ny * 9 + nx];
+          if (tp !== 0 && ((tp > 0) === red)) { continue; }
+          if (capsOnly && tp === 0) { continue; }
+          buf[n++] = enc(x, y, nx, ny);
+        }
+      } else if (t === 4) {
+        for (d = 0; d < 8; d++) {
+          nx = x + KND[d]; ny = y + KNE[d];
+          if (!inBoard(nx, ny)) { continue; }
+          var lx = x + (KND[d] === 2 ? 1 : (KND[d] === -2 ? -1 : 0));
+          var ly = y + (KNE[d] === 2 ? 1 : (KNE[d] === -2 ? -1 : 0));
+          if (b[ly * 9 + lx] !== 0) { continue; }
+          tp = b[ny * 9 + nx];
+          if (tp !== 0 && ((tp > 0) === red)) { continue; }
+          if (capsOnly && tp === 0) { continue; }
+          buf[n++] = enc(x, y, nx, ny);
+        }
+      } else if (t === 5) {
+        for (d = 0; d < 4; d++) {
+          nx = x + KD[d]; ny = y + KE[d];
+          while (inBoard(nx, ny)) {
+            tp = b[ny * 9 + nx];
+            if (tp === 0) { if (!capsOnly) { buf[n++] = enc(x, y, nx, ny); } }
+            else {
+              if ((tp > 0) !== red) { buf[n++] = enc(x, y, nx, ny); }
+              break;
+            }
+            nx += KD[d]; ny += KE[d];
+          }
+        }
+      } else if (t === 6) {
+        for (d = 0; d < 4; d++) {
+          nx = x + KD[d]; ny = y + KE[d];
+          var screen = 0;
+          while (inBoard(nx, ny)) {
+            tp = b[ny * 9 + nx];
+            if (!screen) {
+              if (tp === 0) { if (!capsOnly) { buf[n++] = enc(x, y, nx, ny); } }
+              else { screen = 1; }
+            } else if (tp !== 0) {
+              if ((tp > 0) !== red) { buf[n++] = enc(x, y, nx, ny); }
+              break;
+            }
+            nx += KD[d]; ny += KE[d];
+          }
+        }
+      } else {
+        ny = y + (red ? -1 : 1);
+        if (inBoard(x, ny)) {
+          tp = b[ny * 9 + x];
+          if (tp === 0 || (tp > 0) !== red) { if (!capsOnly || tp !== 0) { buf[n++] = enc(x, y, x, ny); } }
+        }
+        if (red ? y <= 4 : y >= 5) {
+          if (x > 0) { tp = b[y * 9 + x - 1]; if ((tp === 0 || (tp > 0) !== red) && (!capsOnly || tp !== 0)) { buf[n++] = enc(x, y, x - 1, y); } }
+          if (x < 8) { tp = b[y * 9 + x + 1]; if ((tp === 0 || (tp > 0) !== red) && (!capsOnly || tp !== 0)) { buf[n++] = enc(x, y, x + 1, y); } }
+        }
+      }
+    }
+    return n;
+  }
+
+  // ---------------- 将军检测 --------------
+  function inCheckI(side) {
+    var ki = side > 0 ? KPOS[0] : KPOS[1];
+    if (ki < 0) { return false; }
+    var kx = XT[ki], ky = YT[ki], b = BB, i, x, y, p;
+
+    for (i = 0; i < 4; i++) {
+      var dx = KD[i], dy = KE[i];
+      x = kx + dx; y = ky + dy;
+      var first = 0, fxi = 0, fyi = 0;
+      while (inBoard(x, y)) {
+        p = b[y * 9 + x];
+        if (p !== 0) { first = p; fxi = x; fyi = y; break; }
+        x += dx; y += dy;
+      }
+      if (first !== 0 && ((first > 0 ? 1 : -1) !== side)) {
+        var ft = first > 0 ? first : -first;
+        if (ft === 5 || ft === 1) { return true; }
+        x = fxi + dx; y = fyi + dy;
+        while (inBoard(x, y)) {
+          p = b[y * 9 + x];
+          if (p !== 0) {
+            if (((p > 0 ? 1 : -1) !== side) && (p > 0 ? p : -p) === 6) { return true; }
+            break;
+          }
+          x += dx; y += dy;
+        }
+      }
+    }
+
+    for (i = 0; i < 8; i++) {
+      x = kx + KND[i]; y = ky + KNE[i];
+      if (!inBoard(x, y)) { continue; }
+      var q = b[y * 9 + x];
+      if (q === 0) { continue; }
+      if ((q > 0 ? 1 : -1) === side) { continue; }
+      if ((q > 0 ? q : -q) !== 4) { continue; }
+      var legx = (KND[i] === 2 || KND[i] === -2) ? x - KND[i] / 2 : x;
+      var legy = (KNE[i] === 2 || KNE[i] === -2) ? y - KNE[i] / 2 : y;
+      if (b[legy * 9 + legx] === 0) { return true; }
+    }
+
+    if (side > 0) {
+      if (ky > 0 && b[(ky - 1) * 9 + kx] === -7) { return true; }
+      if (ky >= 5) {
+        if (kx > 0 && b[ky * 9 + kx - 1] === -7) { return true; }
+        if (kx < 8 && b[ky * 9 + kx + 1] === -7) { return true; }
+      }
+    } else {
+      if (ky < 9 && b[(ky + 1) * 9 + kx] === 7) { return true; }
+      if (ky <= 4) {
+        if (kx > 0 && b[ky * 9 + kx - 1] === 7) { return true; }
+        if (kx < 8 && b[ky * 9 + kx + 1] === 7) { return true; }
+      }
+    }
+    return false;
+  }
+
+  function inCheck(bChar, side) {
+    loadPos(toInt(bChar));
+    return inCheckI(side === "r" ? 1 : -1) || kingsFace();
+  }
+
+  // ---------------- 评估 --------------
+  var MAT = new Int32Array([0, 220, 220, 440, 1000, 500, 118, 0, 220, 220, 440, 1000, 500, 118]);
+  var PST = new Int32Array(90 * 14);
+  (function () {
+    for (var p = -7; p <= 7; p++) {
+      if (p === 0) { continue; }
+      var pi = pindex(p), t = p > 0 ? p : -p, red = p > 0;
+      for (var y = 0; y < 10; y++) {
+        for (var x = 0; x < 9; x++) {
+          var ry = red ? y : 9 - y;
+          var cx = x < 4 ? 4 - x : x - 4;
+          var v = 0;
+          if (t === 7) {
+            if (ry <= 4) { v = 14 + (4 - ry) * 9 + (4 - cx) * 7; }
+            else if (ry === 5) { v = 6; }
+            else if (ry === 6) { v = 2; }
+          } else if (t === 4) {
+            v = (4 - cx) * 9 + (ry <= 4 ? 10 : 0) + (ry <= 2 ? 6 : 0);
+          } else if (t === 5) {
+            v = (4 - cx) * 5 + (ry <= 4 ? 12 + (4 - ry) * 4 : 0);
+          } else if (t === 6) {
+            v = (4 - cx) * 8 + (ry <= 2 ? 8 : 0);
+          } else if (t === 2 || t === 3) {
+            v = ry >= 7 ? 8 : 0;
+          }
+          PST[idx(x, y) * 14 + pi] = v;
+        }
+      }
+    }
+  })();
+
+  function evalBoard(b) {
+    var s = 0, i, p, pi, sg;
+    for (i = 0; i < 90; i++) {
+      p = b[i];
+      if (p !== 0) {
+        pi = p > 0 ? p - 1 : 6 - p;
+        sg = p > 0 ? 1 : -1;
+        s += sg * (MAT[pi] + PST[i * 14 + pi]);
       }
     }
     return s;
   }
-  function evalSide(b, side) { var v = evalRed(b); return side === "r" ? v : -v; }
 
-  function mvvlva(m) {
-    var cap = m.cap ? (VAL[m.cap.toUpperCase()] || 0) : 0;
-    var me = VAL[(m.cap ? "" : "P")] || 0;
-    return cap * 10;
-  }
-  function orderMoves(list) {
-    list.sort(function (a, b2) { return mvvlva(b2) - mvvlva(a); });
-  }
+  function evalRed(b) { return evalBoard(typeof b[0] === "number" ? b : toInt(b)); }
 
-  var MATE = 90000;
-  // 搜索里用“能吃将=赢”的写法，不做自我将军过滤，速度比 legalMoves 快 5~10 倍；
-  // 根节点仍用 legalMoves，保证 AI 走出真正合法的棋。
-  function negamax(b, side, depth, alpha, beta, ply) {
-    if (depth <= 0) { return evalSide(b, side); }
-    var moves = genMoves(b, side);
-    if (!moves.length) { return -MATE + ply; }
-    orderMoves(moves);
-    var best = -Infinity;
-    for (var i = 0; i < moves.length; i++) {
-      if (moves[i].cap && moves[i].cap.toUpperCase() === "K") { return MATE - ply; }
-      make(b, moves[i]);
-      var v = -negamax(b, other(side), depth - 1, -beta, -alpha, ply + 1);
-      unmake(b, moves[i]);
-      if (v > best) { best = v; }
-      if (best > alpha) { alpha = best; }
-      if (alpha >= beta) { break; }
+  // ---------------- 置换表 / 启发 --------------
+  var TT_BITS = 19, TT_SIZE = 1 << TT_BITS, TT_MASK = TT_SIZE - 1;
+  var ttKey = new Int32Array(TT_SIZE);
+  var ttDepth = new Int8Array(TT_SIZE);
+  var ttFlag = new Int8Array(TT_SIZE);
+  var ttVal = new Int32Array(TT_SIZE);
+  var ttMv = new Int32Array(TT_SIZE);
+
+  var MAXPLY = 80;
+  var gbuf = [], gsbuf = [];
+  for (var q = 0; q < MAXPLY; q++) { gbuf.push(new Int32Array(160)); gsbuf.push(new Int32Array(160)); }
+  var lbuf = new Int32Array(160);
+
+  var killer = new Int32Array(MAXPLY * 2);
+  var hist = new Int32Array(90 * 90);
+  var pathHash = new Int32Array(MAXPLY);
+
+  var MATE = 100000, INF = 200000;
+  var nodes = 0, deadline = 0, stopped = false;
+
+  // 排序缓冲（模块级，嵌套调用安全：同一层只用一次）
+  var OC = new Int32Array(160), OS = new Int32Array(160), OK_ = new Int32Array(160), OR = new Int32Array(160);
+
+  function orderMoves(size, mvTT, ply) {
+    var buf = gbuf[ply];
+    var k0 = killer[ply * 2], k1 = killer[ply * 2 + 1];
+    var ncap = 0, nkill = 0, nrest = 0, i, m, to, cap, pi;
+    for (i = 0; i < size; i++) {
+      m = buf[i];
+      if (mvTT && m === mvTT) { continue; }
+      to = ((m >> 12) & 15) * 9 + ((m >> 8) & 15);
+      cap = BB[to];
+      if (cap !== 0) {
+        pi = cap > 0 ? cap - 1 : 6 - cap;
+        var fp = BB[((m >> 4) & 15) * 9 + (m & 15)];
+        OC[ncap] = m;
+        OS[ncap] = MAT[pi] * 32 - MAT[fp > 0 ? fp - 1 : 6 - fp];
+        ncap++;
+      } else if (m === k0 || m === k1) { OK_[nkill++] = m; }
+      else { OR[nrest++] = m; }
     }
-    return best === -Infinity ? -MATE + ply : best;
+    // 吃子按 MVV-LVA 插入排序
+    for (i = 1; i < ncap; i++) {
+      var v = OC[i], s = OS[i], j = i - 1;
+      while (j >= 0 && OS[j] < s) { OC[j + 1] = OC[j]; OS[j + 1] = OS[j]; j--; }
+      OC[j + 1] = v; OS[j + 1] = s;
+    }
+    var n = 0;
+    if (mvTT) { buf[n++] = mvTT; }
+    for (i = 0; i < nkill; i++) { buf[n++] = OK_[i]; }
+    for (i = 0; i < ncap; i++) { buf[n++] = OC[i]; }
+    for (i = 0; i < nrest; i++) { buf[n++] = OR[i]; }
+    return n;
   }
 
-  // 选一步棋：level 1 简单 / 2 普通 / 3 困难
-  function bestMove(fen, side, level) {
-    var b = parseFEN(fen);
-    var moves = legalMoves(b, side);
-    if (!moves.length) { return null; }
-    if (level <= 1) {
-      // 简单：优先吃大子，其余随机
-      orderMoves(moves);
-      var top = moves.slice(0, Math.min(3, moves.length));
-      return top[Math.floor(Math.random() * top.length)];
+  // ---------------- 静态搜索 --------------
+  function qsearch(alpha, beta, ply) {
+    if (stopped) { return 0; }
+    nodes++;
+    if ((nodes & 2047) === 0 && Date.now() > deadline) { stopped = true; return 0; }
+    if (ply >= MAXPLY - 2) { return TURN * EV; }
+
+    var stand = TURN * EV;
+    if (stand >= beta) { return stand; }
+    if (stand > alpha) { alpha = stand; }
+
+    var size = gen(TURN, gbuf[ply], 1);
+    orderMoves(size, 0, ply);
+    var any = 0;
+    for (var k = 0; k < size; k++) {
+      var mv = gbuf[ply][k];
+      var to = ((mv >> 12) & 15) * 9 + ((mv >> 8) & 15);
+      var cap = BB[to];
+      if (cap === 0) { continue; }
+      if (cap === 1 || cap === -1) { return MATE - ply; }
+      makeI(ply, mv);
+      if (kingsFace()) { unmakeI(ply, mv); continue; }
+      any = 1;
+      TURN = -TURN; HLO ^= ZTL; HHI ^= ZTH;
+      var v = -qsearch(-beta, -alpha, ply + 1);
+      HLO ^= ZTL; HHI ^= ZTH; TURN = -TURN;
+      unmakeI(ply, mv);
+      if (stopped) { return 0; }
+      if (v >= beta) { return v; }
+      if (v > alpha) { alpha = v; }
     }
-    var depth = level === 2 ? 3 : 4;
-    orderMoves(moves);
-    var best = moves[0], bestV = -Infinity, alpha = -Infinity;
-    var t0 = Date.now();
-    var limit = level === 2 ? 900 : 1600;
-    for (var i = 0; i < moves.length; i++) {
-      make(b, moves[i]);
-      var v = -negamax(b, other(side), depth - 1, -Infinity, -alpha, 1);
-      unmake(b, moves[i]);
-      v += Math.random() * 6;                       // 同分棋随机，免得每局一模一样
-      if (v > bestV) { bestV = v; best = moves[i]; alpha = bestV; }
-      if (Date.now() - t0 > limit) { break; }
+    // 没有任何吃子时，若正被将军，需要把全部着法搜完
+    if (!any && inCheckI(TURN)) {
+      var size2 = gen(TURN, gbuf[ply]);
+      var legal = 0;
+      for (var k2 = 0; k2 < size2; k2++) {
+        var mv2 = gbuf[ply][k2];
+        var to2 = ((mv2 >> 12) & 15) * 9 + ((mv2 >> 8) & 15);
+        if (BB[to2] === 1 || BB[to2] === -1) { return MATE - ply; }
+        makeI(ply, mv2);
+        if (kingsFace()) { unmakeI(ply, mv2); continue; }
+        legal++;
+        TURN = -TURN; HLO ^= ZTL; HHI ^= ZTH;
+        var v2 = -qsearch(-beta, -alpha, ply + 1);
+        HLO ^= ZTL; HHI ^= ZTH; TURN = -TURN;
+        unmakeI(ply, mv2);
+        if (stopped) { return 0; }
+        if (v2 >= beta) { return v2; }
+        if (v2 > alpha) { alpha = v2; }
+      }
+      if (legal === 0) { return -MATE + ply; }
+    }
+    return alpha;
+  }
+
+  // ---------------- 主搜索 --------------
+  function negamax(depth, alpha, beta, ply) {
+    if (stopped) { return 0; }
+    nodes++;
+    if ((nodes & 2047) === 0 && Date.now() > deadline) { stopped = true; return 0; }
+    if (ply >= MAXPLY - 4) { return TURN * EV; }
+
+    pathHash[ply] = HLO;
+    for (var r = ply - 2; r >= 0 && r >= ply - 24; r -= 2) {
+      if (pathHash[r] === HLO) { return 0; }
+    }
+
+    var tti = HLO & TT_MASK;
+    var mvTT = 0;
+    if (ttKey[tti] === HHI && ttDepth[tti] > 0) {
+      var td = ttDepth[tti] - 1;
+      mvTT = ttMv[tti];
+      if (td >= depth) {
+        var tv = ttVal[tti], f = ttFlag[tti];
+        if (f === 1) { return tv; }
+        if (f === 2 && tv >= beta) { return tv; }
+        if (f === 3 && tv <= alpha) { return tv; }
+      }
+    }
+
+    if (depth <= 0) { return qsearch(alpha, beta, ply); }
+
+    var inChk = 0;
+    if (depth >= 3) { inChk = inCheckI(TURN) ? 1 : 0; }
+
+    if (depth >= 3 && !inChk && ply > 0 && alpha > -MATE + 2000 && beta < MATE - 2000) {
+      TURN = -TURN; HLO ^= ZTL; HHI ^= ZTH;
+      var nv = -negamax(depth - 3, -beta, -beta + 1, ply + 1);
+      HLO ^= ZTL; HHI ^= ZTH; TURN = -TURN;
+      if (stopped) { return 0; }
+      if (nv >= beta) { return beta; }
+    }
+
+    var size = gen(TURN, gbuf[ply]);
+    size = orderMoves(size, mvTT, ply);
+    var best = -INF, bestMv = 0, origAlpha = alpha, legal = 0;
+    var buf = gbuf[ply];
+
+    for (var k = 0; k < size; k++) {
+      var mv = buf[k];
+      var to = ((mv >> 12) & 15) * 9 + ((mv >> 8) & 15);
+      var cap = BB[to];
+      if (cap === 1 || cap === -1) { return MATE - ply; }
+
+      makeI(ply, mv);
+      if (kingsFace()) { unmakeI(ply, mv); continue; }
+      legal++;
+      TURN = -TURN; HLO ^= ZTL; HHI ^= ZTH;
+
+      var v;
+      if (legal === 1) {
+        v = -negamax(depth - 1, -beta, -alpha, ply + 1);
+      } else {
+        var reduce = (depth >= 3 && legal > 3 && cap === 0 && !inChk) ? 1 : 0;
+        v = -negamax(depth - 1 - reduce, -alpha - 1, -alpha, ply + 1);
+        if (!stopped && v > alpha && v < beta) {
+          v = -negamax(depth - 1, -beta, -alpha, ply + 1);
+        }
+      }
+
+      HLO ^= ZTL; HHI ^= ZTH; TURN = -TURN;
+      unmakeI(ply, mv);
+      if (stopped) { return 0; }
+
+      if (v > best) {
+        best = v; bestMv = mv;
+        if (v > alpha) {
+          alpha = v;
+          if (alpha >= beta) {
+            if (cap === 0) {
+              if (killer[ply * 2] !== mv) { killer[ply * 2 + 1] = killer[ply * 2]; killer[ply * 2] = mv; }
+              var f2 = ((mv >> 4) & 15) * 9 + (mv & 15);
+              hist[f2 * 90 + to] += depth * depth;
+            }
+            break;
+          }
+        }
+      }
+    }
+
+    if (legal === 0) { return -MATE + ply; }
+
+    if (best > -MATE + 1000 && best < MATE - 1000) {
+      ttKey[tti] = HHI;
+      ttDepth[tti] = depth + 1;
+      ttFlag[tti] = best <= origAlpha ? 3 : (best >= beta ? 2 : 1);
+      ttVal[tti] = best;
+      ttMv[tti] = bestMv;
     }
     return best;
   }
 
-  // ---------------- 记谱（中式写法） ----------------
+  // ---------------- 根节点 --------------
+  function legalRootMoves(side) {
+    var size = gen(side, lbuf), out = [], k;
+    for (k = 0; k < size; k++) {
+      var mv = lbuf[k];
+      var to = ((mv >> 12) & 15) * 9 + ((mv >> 8) & 15);
+      var tcap = BB[to];
+      if (tcap === 1 || tcap === -1) { out.push(mv); continue; }
+      makeI(0, mv);
+      var bad = inCheckI(side) || kingsFace();
+      unmakeI(0, mv);
+      if (!bad) { out.push(mv); }
+    }
+    return out;
+  }
+
+  var LEVELS = [
+    null,
+    { name: "入门", depth: 2, ms: 200, noise: 700 },
+    { name: "简单", depth: 3, ms: 600, noise: 260 },
+    { name: "普通", depth: 5, ms: 1200, noise: 70 },
+    { name: "困难", depth: 10, ms: 2400, noise: 0 },
+    { name: "大师", depth: 14, ms: 4500, noise: 0 },
+    { name: "超强", depth: 20, ms: 8000, noise: 0 }
+  ];
+
+  function think(fen, side, level, onInfo, repList) {
+    var cfg = LEVELS[level] || LEVELS[3];
+    var bi = toInt(parseFEN(fen));
+    loadPos(bi);
+    TURN = side === "r" ? 1 : -1;
+    hashPos();
+    if (TURN < 0) { HLO ^= ZTL; HHI ^= ZTH; }
+    nodes = 0; stopped = false;
+    deadline = Date.now() + cfg.ms;
+    for (var i = 0; i < MAXPLY * 2; i++) { killer[i] = 0; }
+
+    var t0 = Date.now();
+    var list = legalRootMoves(TURN);
+    if (!list.length) { return null; }
+    var best = list[0], bestScore = 0, doneDepth = 0;
+    var order = [];
+    var oscore = [];
+    for (i = 0; i < list.length; i++) {
+      var mv = list[i];
+      var to = ((mv >> 12) & 15) * 9 + ((mv >> 8) & 15);
+      var cap = BB[to];
+      order.push(i);
+      oscore.push(cap ? MAT[cap > 0 ? cap - 1 : 6 - cap] : 0);
+    }
+    order.sort(function (a, b) { return oscore[b] - oscore[a]; });
+
+    // 重复局面惩罚：避免 AI 在均势时反复走同一步
+    var repPen = null;
+    if (repList && repList.length) {
+      repPen = new Int32Array(list.length);
+      var oppSide = side === "r" ? "b" : "r";
+      for (i = 0; i < list.length; i++) {
+        makeI(0, list[i]);
+        repPen[i] = repList.indexOf(toFEN(BB, oppSide)) >= 0 ? 30 : 0;
+        unmakeI(0, list[i]);
+      }
+    }
+
+    for (var d = 1; d <= cfg.depth; d++) {
+      var alpha = -INF, bm = 0, bs = -INF, bsv = 0;
+      for (var oi = 0; oi < order.length; oi++) {
+        var mvi = list[order[oi]];
+        makeI(0, mvi);
+        TURN = -TURN; HLO ^= ZTL; HHI ^= ZTH;
+        var v;
+        if (oi === 0) {
+          v = -negamax(d - 1, -INF, -alpha, 1);
+        } else {
+          v = -negamax(d - 1, -alpha - 1, -alpha, 1);
+          if (!stopped && v > alpha) { v = -negamax(d - 1, -INF, -alpha, 1); }
+        }
+        HLO ^= ZTL; HHI ^= ZTH; TURN = -TURN;
+        unmakeI(0, mvi);
+        if (stopped) { break; }
+        var vv = v + (cfg.noise ? (Math.random() * cfg.noise - cfg.noise / 2) : 0);
+        if (repPen) { vv -= repPen[order[oi]]; }
+        if (vv > bs) { bs = vv; bm = mvi; bsv = v; if (v > alpha) { alpha = v; } }
+      }
+      if (stopped && bm === 0) { break; }
+      if (bm) {
+        best = bm; bestScore = bsv; doneDepth = d;
+        for (i = 0; i < order.length; i++) { if (list[order[i]] === bm) { order.unshift(order[i]); order.splice(i + 1, 1); break; } }
+        if (onInfo) { onInfo({ depth: d, score: bsv, nodes: nodes, ms: Date.now() - t0 }); }
+        if (Math.abs(bsv) > MATE - 2000) { break; }
+      }
+      if (stopped || Date.now() > deadline) { break; }
+    }
+
+    var fx = best & 15, fy = (best >> 4) & 15, tx = (best >> 8) & 15, ty = (best >> 12) & 15;
+    return {
+      fx: fx, fy: fy, tx: tx, ty: ty,
+      cap: charOf(bi[ty * 9 + tx]),
+      depth: doneDepth, score: bestScore, nodes: nodes, ms: Date.now() - t0
+    };
+  }
+
+  function bestMove(fen, side, level) { return think(fen, side, level, null); }
+
+  // ---------------- 对外包装（字符版，兼容旧调用） --------------
+  function decObj(mv, bChar) {
+    var fx = mv & 15, fy = (mv >> 4) & 15, tx = (mv >> 8) & 15, ty = (mv >> 12) & 15;
+    return { fx: fx, fy: fy, tx: tx, ty: ty, cap: (bChar && bChar[idx(tx, ty)]) || "" };
+  }
+
+  function genMoves(bChar, side) {
+    loadPos(toInt(bChar));
+    var size = gen(side === "r" ? 1 : -1, lbuf), out = [], i;
+    for (i = 0; i < size; i++) { out.push(decObj(lbuf[i], bChar)); }
+    return out;
+  }
+
+  function legalMoves(bChar, side) {
+    var bi = toInt(bChar);
+    loadPos(bi);
+    var list = legalRootMoves(side === "r" ? 1 : -1), out = [], i;
+    for (i = 0; i < list.length; i++) { out.push(decObj(list[i], bChar)); }
+    return out;
+  }
+
+  function gameOver(bChar, side) {
+    var s = side === "r" ? 1 : -1;
+    var list = legalMoves(bChar, side);
+    if (!list.length) {
+      loadPos(toInt(bChar));
+      return { over: true, winner: other(side), reason: inCheckI(s) ? "将死" : "困毙" };
+    }
+    return { over: false };
+  }
+
+  // ---------------- 记谱 ----------
   var NAME = { K: "帅", A: "仕", B: "相", N: "马", R: "车", C: "炮", P: "兵" };
   var NAMEB = { K: "将", A: "士", B: "象", N: "马", R: "车", C: "炮", P: "卒" };
   function fileName(x, side) { return side === "r" ? 9 - x : x + 1; }
@@ -309,24 +757,20 @@
 
   function moveText(b, mv) {
     var p = b[idx(mv.fx, mv.fy)];
-    var side = sideOf(p);
-    var t = p.toUpperCase();
+    if (!p) { return "?"; }
+    var side = sideOf(p), t = p.toUpperCase();
     var nm = side === "r" ? NAME[t] : NAMEB[t];
-    // 同一列上有两个同样的子，用“前/后”
     var same = 0, isFront = false;
     for (var y = 0; y < 10; y++) {
-      var q = b[idx(mv.fx, y)];
-      if (q && sideOf(q) === side && q.toUpperCase() === t) {
+      var q2 = b[idx(mv.fx, y)];
+      if (q2 && sideOf(q2) === side && q2.toUpperCase() === t) {
         same++;
         if (side === "r" ? y < mv.fy : y > mv.fy) { isFront = true; }
       }
     }
-    var head = nm;
-    if (same >= 2) {
-      head = (isFront ? "前" : "后") + nm;
-    } else {
-      head = nm + cn(fileName(mv.fx, side));
-    }
+    var head;
+    if (same >= 2) { head = (isFront ? "前" : "后") + nm; }
+    else { head = nm + cn(fileName(mv.fx, side)); }
     if (mv.fy === mv.ty) { return head + "平" + cn(fileName(mv.tx, side)); }
     var forward = side === "r" ? mv.ty < mv.fy : mv.ty > mv.fy;
     var act = forward ? "进" : "退";
@@ -336,12 +780,15 @@
 
   g.XQ = {
     START_FEN: START_FEN,
+    LEVELS: LEVELS,
     parseFEN: parseFEN,
     toFEN: toFEN,
     idx: idx,
     isRed: isRed,
     sideOf: sideOf,
     other: other,
+    charOf: charOf,
+    codeOf: codeOf,
     genMoves: genMoves,
     legalMoves: legalMoves,
     inCheck: inCheck,
@@ -350,7 +797,8 @@
     gameOver: gameOver,
     evalRed: evalRed,
     bestMove: bestMove,
+    think: think,
     moveText: moveText,
     findKing: findKing
   };
-})(typeof window !== "undefined" ? window : globalThis);
+})(typeof window !== "undefined" ? window : (typeof self !== "undefined" ? self : globalThis));

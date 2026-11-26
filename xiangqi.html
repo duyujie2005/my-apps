@@ -170,11 +170,14 @@
     <button data-mode="ai">我和人机打</button>
   </div>
   <div id="aiOpts" style="display:none">
-    <div class="room">
+    <div class="room" style="flex-wrap:wrap;gap:6px">
       <span class="tip">难度</span>
-      <button class="lv" data-lv="1">简单</button>
-      <button class="lv" data-lv="2">普通</button>
-      <button class="lv" data-lv="3">困难</button>
+      <button class="lv" data-lv="1">入门</button>
+      <button class="lv" data-lv="2">简单</button>
+      <button class="lv" data-lv="3">普通</button>
+      <button class="lv" data-lv="4">困难</button>
+      <button class="lv" data-lv="5">大师</button>
+      <button class="lv" data-lv="6">超强</button>
     </div>
   </div>
   <div id="onlineOpts" style="display:none">
@@ -240,13 +243,16 @@
     selected: null,
     lastMove: null,
     humanSide: "r",          // 人机模式里我执哪方
-    level: 2,
+    level: 3,
     myId: "",
     room: "",                // 房间号
     myColor: "",             // 联机时我是 r 还是 b
     rivalNick: "",
     rivalArrived: false,
     thinking: false,
+    posHist: [],             // 最近的局面 FEN，给引擎做重复局面惩罚
+    thinkDepth: 0,
+    thinkNodes: 0,
     pollTimer: null,
     lastStamp: ""
   };
@@ -356,9 +362,13 @@
     if (S.mode === "self") {
       el.status.innerHTML = "轮到你走：<b>" + (S.side === "r" ? "红方" : "黑方") + "</b>（两边都由你操作）";
     } else if (S.mode === "ai") {
-      el.status.innerHTML = S.thinking ? "电脑在想…" :
-        (S.side === S.humanSide ? "轮到你走（你执<b>" + (S.humanSide === "r" ? "红" : "黑") + "</b>）"
-          : "电脑走棋中…");
+      if (S.thinking) {
+        el.status.innerHTML = "电脑在想…<span style='opacity:.7'>第 " + (S.thinkDepth || 1) + " 层 · " +
+          Math.round((S.thinkNodes || 0) / 10000) + " 万局面</span>";
+      } else {
+        el.status.innerHTML = S.side === S.humanSide ? "轮到你走（你执<b>" + (S.humanSide === "r" ? "红" : "黑") + "</b>）"
+          : "电脑走棋中…";
+      }
     } else if (S.mode === "online") {
       if (!S.room) { el.status.innerHTML = "建房间或输入房间号加入"; return; }
       if (!S.myColor) { el.status.innerHTML = "正在进入房间…"; return; }
@@ -411,6 +421,8 @@
     S.side = XQ.other(mover);
     S.lastMove = mv;
     S.selected = null;
+    S.posHist.push(S.fen);
+    if (S.posHist.length > 14) { S.posHist.shift(); }
 
     var end = XQ.gameOver(b, S.side);
     if (end.over) {
@@ -426,15 +438,72 @@
     if (S.mode === "ai" && !S.over && S.side !== S.humanSide && !S.thinking) { aiTurn(); }
   }
 
-  function aiTurn() {
-    S.thinking = true;
-    updateStatus();
+  // ---------------- 电脑走棋（放在 Worker 里算，界面不卡） ----------------
+  var AIW = null, AIID = 0;
+
+  function stopAI() {
+    AIID++;
+    if (AIW) { try { AIW.terminate(); } catch (e) {} AIW = null; }
+    S.thinking = false;
+    S.thinkDepth = 0;
+    S.thinkNodes = 0;
+  }
+
+  function aiFallback() {
+    if (S.over || S.side === S.humanSide) { S.thinking = false; render(); return; }
     setTimeout(function () {
-      var mv = XQ.bestMove(S.fen, S.side, S.level);
+      var mv = XQ.bestMove(S.fen, S.side, Math.min(S.level, 4));
       S.thinking = false;
-      if (!mv) { render(); return; }
+      if (!mv || S.over || S.side === S.humanSide) { render(); return; }
       doMove(XQ.parseFEN(S.fen), mv, false);
-    }, 180);
+    }, 60);
+  }
+
+  function onAI(e) {
+    var d = e.data || {};
+    if (d.id !== AIID) { return; }
+    if (d.type === "info") {
+      S.thinkDepth = d.depth;
+      S.thinkNodes = d.nodes;
+      updateStatus();
+      return;
+    }
+    if (d.type === "error") { AIW = null; stopAI(); aiFallback(); return; }
+    if (d.type === "move") {
+      S.thinking = false;
+      S.thinkDepth = 0;
+      S.thinkNodes = 0;
+      if (!d.mv || S.over) { render(); return; }
+      doMove(XQ.parseFEN(S.fen), d.mv, false);
+    }
+  }
+
+  function ensureWorker() {
+    if (AIW) { return AIW; }
+    if (!window.Worker) { return null; }
+    try {
+      AIW = new Worker("xiangqi_ai.js");
+      AIW.onmessage = onAI;
+      AIW.onerror = function () { AIW = null; stopAI(); aiFallback(); };
+    } catch (err) { AIW = null; }
+    return AIW;
+  }
+
+  function aiTurn() {
+    if (S.thinking || S.over) { return; }
+    S.thinking = true;
+    S.thinkDepth = 0;
+    S.thinkNodes = 0;
+    updateStatus();
+    var w = ensureWorker();
+    if (!w) { aiFallback(); return; }
+    AIID++;
+    try {
+      w.postMessage({
+        type: "go", id: AIID, fen: S.fen, side: S.side, level: S.level,
+        repList: S.posHist.slice(-10)
+      });
+    } catch (err) { AIW = null; aiFallback(); }
   }
 
   // ---------------- 联机 ----------------
@@ -607,14 +676,17 @@
   }
 
   function reset() {
+    stopAI();
     S.fen = START; S.side = "r"; S.history = []; S.over = false; S.result = "";
-    S.selected = null; S.lastMove = null; S.thinking = false;
+    S.selected = null; S.lastMove = null;
+    S.posHist = [S.fen];
     el.hintText.textContent = "";
     render();
   }
 
   function undo() {
     if (S.mode === "online") { el.hintText.textContent = "联机模式不能悔棋"; return; }
+    stopAI();
     var steps = S.mode === "ai" ? 2 : 1;
     while (steps > 0 && S.history.length) {
       var h = S.history.pop();
@@ -624,6 +696,8 @@
     }
     S.over = false; S.result = ""; S.selected = null;
     S.lastMove = S.history.length ? S.history[S.history.length - 1].mv : null;
+    S.posHist = S.history.map(function (x) { return x.fen; });
+    S.posHist.push(S.fen);
     render();
     if (S.mode === "ai" && !S.over && S.side !== S.humanSide) { aiTurn(); }
   }
@@ -728,7 +802,7 @@
 
   // 初始化
   drawGrid();
-  document.querySelector('.lv[data-lv="2"]').classList.add("pri");
+  document.querySelector('.lv[data-lv="3"]').classList.add("pri");
   setMode("ai");
 
   // 提前把云端拉起来（supabase.js 108KB，早点下载，点按钮时就不用等）
