@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f1420">
+<title>围棋（9 路）· 杜裕杰的软件柜</title>
+<script src="auth.js" data-guard="1"></script>
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh; min-height: 100dvh; overflow: hidden;
+    padding-top: 42px;
+    font-family: "Microsoft YaHei", -apple-system, "PingFang SC", sans-serif;
+    background: radial-gradient(130% 120% at 50% 0%, #1c2537 0%, #0b0f18 58%, #06090f 100%);
+    color: #e9eef7;
+  }
+  .board {
+    position: relative;
+    width: min(calc(100vw - 6px), calc(100dvh - 48px));
+    aspect-ratio: 1 / 1;
+    padding: 5.5%;
+    background: linear-gradient(160deg, #f3ddb0 0%, #e9cd97 48%, #dcb87c 100%);
+    border-radius: 10px;
+    box-shadow: 0 20px 60px #00000066, inset 0 0 0 1px #ffffff66, inset 0 0 40px #b98b4a33;
+  }
+  .inner { position: relative; width: 100%; height: 100%; container-type: size; }
+  .inner svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+  .piece {
+    position: absolute; width: 10.6%; aspect-ratio: 1; transform: translate(-50%, -50%);
+    border-radius: 50%; z-index: 2;
+  }
+  .piece.b {
+    background: radial-gradient(circle at 34% 28%, #6e7380, #20242c 62%, #05070a);
+    box-shadow: 0 2px 6px #00000055, inset 0 0 0 1px #ffffff22;
+  }
+  .piece.w {
+    background: radial-gradient(circle at 34% 28%, #ffffff, #e8e4d8 62%, #c6bfae);
+    box-shadow: 0 2px 6px #00000040, inset 0 0 0 1px #ffffffaa;
+  }
+  .piece.last::after {
+    content: ""; position: absolute; inset: 38%;
+    border-radius: 50%; background: #ff4d3d; opacity: .85;
+  }
+  .piece.w.last::after { background: #e0492c; }
+
+  .topbar {
+    position: fixed; left: 0; right: 0; top: 0; z-index: 30; height: 42px;
+    display: flex; align-items: center; gap: 9px; padding: 0 10px;
+    background: linear-gradient(#0c1322, #0c1322e6 70%, #0c132200);
+  }
+  .hbtn {
+    flex: none; display: flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 50%; padding: 0;
+    background: #ffffff14; border: 1px solid #ffffff24; color: #cfd9ea;
+    text-decoration: none; cursor: pointer; font-size: 15px; font-family: inherit;
+  }
+  .hbtn:active { background: #ffffff2e; }
+  .st {
+    flex: 1 1 auto; min-width: 0; font-size: 13.5px; font-weight: 600; color: #dfe8f5;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .st b { color: #8bbcff; }
+  .st.warn { color: #ff8f7a; }
+  .st.good { color: #6ee7a8; }
+
+  .toast {
+    position: fixed; left: 50%; bottom: 34px; transform: translate(-50%, 12px); z-index: 45;
+    max-width: 84vw; text-align: center; font-size: 13px; line-height: 1.5;
+    background: #0d1522ee; color: #ffd479; border: 1px solid #ffffff1f;
+    padding: 9px 14px; border-radius: 999px; opacity: 0; pointer-events: none;
+    transition: opacity .18s, transform .18s;
+  }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+  .panel {
+    position: fixed; left: 10px; right: 10px; bottom: 10px; z-index: 35;
+    max-width: 560px; margin: 0 auto; padding: 12px 12px 14px;
+    background: #0e1421ee; border: 1px solid #26324a; border-radius: 14px;
+    box-shadow: 0 18px 50px #00000088; backdrop-filter: blur(10px);
+    max-height: 58vh; overflow: auto;
+  }
+  .modes { display: flex; gap: 8px; margin-bottom: 9px; flex-wrap: wrap; }
+  .modes button {
+    flex: 1 1 40%; padding: 11px 6px; border-radius: 10px; cursor: pointer;
+    background: #1a2232; color: #cfd9ea; border: 1px solid #26324a; font-size: 13px;
+    font-family: inherit;
+  }
+  .modes button.on { background: #2b6df6; color: #fff; border-color: #2b6df6; }
+  .row { display: flex; gap: 7px; flex-wrap: wrap; align-items: center; margin-bottom: 8px; }
+  .lv, .btns button {
+    padding: 9px 12px; border-radius: 9px; cursor: pointer; font-size: 13px; font-family: inherit;
+    background: #1a2232; color: #cfd9ea; border: 1px solid #26324a;
+  }
+  .lv.on { background: #2b6df6; border-color: #2b6df6; color: #fff; }
+  .btns { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
+  .btns button.pri { background: #2b6df6; border-color: #2b6df6; color: #fff; }
+  .btns button.warn { background: #b23a2a; border-color: #b23a2a; color: #fff; }
+  .tip { font-size: 12px; color: #8a93a5; line-height: 1.7; }
+  .caps { font-size: 12.5px; color: #aab6c9; margin: 6px 0 2px; }
+  .caps b { color: #dfe8f5; }
+  .result {
+    margin-top: 8px; padding: 9px 11px; border-radius: 10px; font-size: 13px; line-height: 1.7;
+    background: #12203a; border: 1px solid #2b4a7a; color: #cfe0ff; display: none;
+  }
+
+  @media (max-height: 520px) { .panel { max-height: 70vh; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <a class="hbtn" href="index.html" title="返回软件柜">‹</a>
+  <div class="st" id="status">准备开局</div>
+  <button class="hbtn" id="menuBtn" title="菜单">☰</button>
+</div>
+
+<div class="board" id="board">
+  <div class="inner" id="inner">
+    <svg id="grid" viewBox="0 0 8 8" preserveAspectRatio="none"></svg>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="panel" id="panel" style="display:none">
+  <div class="modes">
+    <button data-mode="ai">我和电脑下</button>
+    <button data-mode="self">两个人下一盘</button>
+  </div>
+  <div class="row" id="lvRow">
+    <span class="tip">难度</span>
+    <button class="lv" data-lv="1">入门</button>
+    <button class="lv" data-lv="2">普通</button>
+    <button class="lv" data-lv="3">困难</button>
+  </div>
+  <div class="row" id="colorRow">
+    <span class="tip">我执</span>
+    <button class="lv" data-color="1">黑（先下）</button>
+    <button class="lv" data-color="2">白（后下，贴 7.5 目）</button>
+  </div>
+  <div class="caps" id="caps">提子：黑 0 · 白 0</div>
+  <div class="btns">
+    <button id="passBtn">停一手</button>
+    <button id="undoBtn">悔一步</button>
+    <button id="countBtn" class="warn">数子结束</button>
+    <button id="restartBtn" class="pri">重新开局</button>
+  </div>
+  <div class="result" id="result"></div>
+  <div class="tip" style="margin-top:8px">
+    9 路小棋盘，点交叉点落子。没有气的子会被提掉，不能自杀，打劫不能立刻提回。
+    双方都「停一手」或者点「数子结束」就结算：自己子 + 围住的空，白方多 7.5 目。
+  </div>
+</div>
+
+<script src="weiqi.js"></script>
+<script>
+(function () {
+  var W = window.WEIQI;
+  var N = W.N;
+  var BLACK = 1, WHITE = 2;
+  var MARGIN = 0.055;
+
+  var el = {
+    board: document.getElementById("board"),
+    inner: document.getElementById("inner"),
+    grid: document.getElementById("grid"),
+    status: document.getElementById("status"),
+    panel: document.getElementById("panel"),
+    lvRow: document.getElementById("lvRow"),
+    colorRow: document.getElementById("colorRow"),
+    caps: document.getElementById("caps"),
+    result: document.getElementById("result"),
+    passBtn: document.getElementById("passBtn"),
+    undoBtn: document.getElementById("undoBtn"),
+    countBtn: document.getElementById("countBtn"),
+    restartBtn: document.getElementById("restartBtn"),
+    toast: document.getElementById("toast"),
+    menuBtn: document.getElementById("menuBtn")
+  };
+
+  var S = {
+    mode: "ai",
+    level: 2,
+    humanColor: BLACK,
+    board: W.newBoard(),
+    turn: BLACK,
+    ko: -1,
+    caps: { 1: 0, 2: 0 },
+    history: [],
+    over: false,
+    thinking: false,
+    passes: 0,
+    last: null
+  };
+
+  function drawGrid() {
+    var s = "", i;
+    for (i = 0; i < N; i++) {
+      s += '<line x1="' + i + '" y1="0" x2="' + i + '" y2="' + (N - 1) + '" />';
+      s += '<line x1="0" y1="' + i + '" x2="' + (N - 1) + '" y2="' + i + '" />';
+    }
+    var stars = [[2, 2], [6, 2], [2, 6], [6, 6], [4, 4]];
+    for (i = 0; i < stars.length; i++) {
+      s += '<circle cx="' + stars[i][0] + '" cy="' + stars[i][1] + '" r="0.34" fill="#6b4a2a" />';
+    }
+    el.grid.innerHTML = s +
+      '<style>line{stroke:#8a6438;stroke-width:.05;stroke-opacity:.85}circle{opacity:.7}</style>';
+  }
+
+  function posOf(i) { return (MARGIN + (i / (N - 1)) * (1 - 2 * MARGIN)) * 100; }
+
+  function render() {
+    var olds = el.inner.querySelectorAll(".piece");
+    for (var i = 0; i < olds.length; i++) { olds[i].remove(); }
+
+    for (var y = 0; y < N; y++) {
+      for (var x = 0; x < N; x++) {
+        var v = S.board[W.idx(x, y)];
+        if (!v) { continue; }
+        var d = document.createElement("div");
+        d.className = "piece " + (v === BLACK ? "b" : "w");
+        d.style.left = posOf(x) + "%";
+        d.style.top = posOf(y) + "%";
+        if (S.last && S.last.x === x && S.last.y === y) { d.className += " last"; }
+        el.inner.appendChild(d);
+      }
+    }
+    el.caps.innerHTML = "提子：黑 <b>" + S.caps[1] + "</b> · 白 <b>" + S.caps[2] + "</b>" +
+      (S.passes ? "　（已停一手 " + S.passes + " 次）" : "");
+    updateStatus();
+  }
+
+  function updateStatus() {
+    el.status.className = "st";
+    if (S.over) { return; }
+    if (S.thinking) { el.status.textContent = "电脑在想…"; return; }
+    if (S.mode === "self") {
+      el.status.innerHTML = "轮到<b>" + (S.turn === BLACK ? "黑" : "白") + "</b>下";
+    } else {
+      el.status.innerHTML = S.turn === S.humanColor
+        ? "轮到你下（你执<b>" + (S.humanColor === BLACK ? "黑" : "白") + "</b>）"
+        : "电脑在走…";
+    }
+  }
+
+  function toast(msg) {
+    el.toast.textContent = msg;
+    el.toast.className = "toast show";
+    clearTimeout(toast._t);
+    toast._t = setTimeout(function () { el.toast.className = "toast"; }, 2200);
+  }
+
+  /* ---------- 落子 ---------- */
+  function why(x, y, c) {
+    var i = W.idx(x, y);
+    if (S.board[i] !== 0) { return "这里已经有子了"; }
+    if (i === S.ko) { return "打劫：这一手不能马上提回，先在别处找一手"; }
+    var sim = W.clone(S.board);
+    if (!W.playAt(sim, x, y, c, S.ko)) { return "这手是自杀（下完自己没气），规则不允许"; }
+    return "";
+  }
+
+  function place(x, y, c) {
+    var nb = W.clone(S.board);
+    var r = W.playAt(nb, x, y, c, S.ko);
+    if (!r) { toast(why(x, y, c) || "这手不能下"); return false; }
+
+    S.history.push({ b: S.board, ko: S.ko, turn: S.turn, caps: { 1: S.caps[1], 2: S.caps[2] }, last: S.last, passes: S.passes });
+    S.board = nb;
+    S.caps[c] += r.removed.length;
+    S.ko = r.ko;
+    S.last = { x: x, y: y };
+    S.passes = 0;
+    S.turn = W.other(c);
+    render();
+    if (r.removed.length) {
+      toast("提掉对方 " + r.removed.length + " 子");
+    }
+    maybeAI();
+    return true;
+  }
+
+  function maybeAI() {
+    if (S.mode !== "ai" || S.over || S.turn !== W.other(S.humanColor)) { return; }
+    S.thinking = true;
+    updateStatus();
+    var bSnap = S.board, koSnap = S.ko, side = S.turn, lv = S.level;
+    setTimeout(function () {
+      var mv = W.best(bSnap, side, koSnap, lv);
+      S.thinking = false;
+      if (!mv) { doPass(side, true); return; }
+      if (!place(mv.x, mv.y, side)) { doPass(side, true); }
+    }, 150);
+  }
+
+  /* ---------- pass / 数子 ---------- */
+  function doPass(c, auto) {
+    if (S.over) { return; }
+    S.history.push({ b: S.board, ko: S.ko, turn: S.turn, caps: { 1: S.caps[1], 2: S.caps[2] }, last: S.last, passes: S.passes });
+    S.passes++;
+    S.turn = W.other(c);
+    S.ko = -1;
+    render();
+    if (S.passes >= 2) { finish(); return; }
+    if (!auto) { toast("你停了一手，等对方也停就结算"); }
+    maybeAI();
+  }
+
+  function finish() {
+    S.over = true;
+    var s = W.score(S.board);
+    var mine = S.mode === "ai" ? S.humanColor : 0;
+    var winner = s.winner;
+    var margin = Math.abs(s.margin).toFixed(1);
+    var text = "黑 " + s.black.toFixed(1) + " 目（子 " + s.blackStones + " + 空 " + s.blackTerritory + "）<br>" +
+      "白 " + s.white.toFixed(1) + " 目（子 " + s.whiteStones + " + 空 " + s.whiteTerritory + " + 贴 7.5）<br>" +
+      "结果：<b>" + (winner === BLACK ? "黑" : "白") + "胜 " + margin + " 目</b>" +
+      (s.neutral ? "　· 单官 " + s.neutral + " 点未计" : "");
+    el.result.innerHTML = text;
+    el.result.style.display = "block";
+
+    if (S.mode === "ai") {
+      var iWin = winner === S.humanColor;
+      el.status.className = "st " + (iWin ? "good" : "warn");
+      el.status.textContent = iWin ? "🎉 你赢了 " + margin + " 目" : "😵 电脑赢 " + margin + " 目";
+      toast(iWin ? "赢了！这盘你围得更多" : "电脑赢这盘，再来一盘？");
+    } else {
+      el.status.textContent = (winner === BLACK ? "黑" : "白") + "胜 " + margin + " 目";
+      toast("数子完成");
+    }
+  }
+
+  /* ---------- 点击 ---------- */
+  function hitPoint(clientX, clientY) {
+    var r = el.inner.getBoundingClientRect();
+    if (!r.width) { return null; }
+    var px = (clientX - r.left) / r.width;
+    var py = (clientY - r.top) / r.height;
+    var gx = ((px - MARGIN) / (1 - 2 * MARGIN)) * (N - 1);
+    var gy = ((py - MARGIN) / (1 - 2 * MARGIN)) * (N - 1);
+    var x = Math.round(gx), y = Math.round(gy);
+    if (x < 0 || x > N - 1 || y < 0 || y > N - 1) { return null; }
+    if (Math.abs(gx - x) > 0.6 || Math.abs(gy - y) > 0.6) { return null; }
+    return { x: x, y: y };
+  }
+
+  el.board.addEventListener("pointerdown", function (e) {
+    if (S.over) { toast("这盘结束了，点「重新开局」再来"); return; }
+    if (S.thinking) { return; }
+    if (S.mode === "ai" && S.turn !== S.humanColor) { return; }
+    var p = hitPoint(e.clientX, e.clientY);
+    if (!p) { return; }
+    place(p.x, p.y, S.turn);
+  });
+
+  /* ---------- 控件 ---------- */
+  function reset() {
+    S.board = W.newBoard();
+    S.turn = BLACK;
+    S.ko = -1;
+    S.caps = { 1: 0, 2: 0 };
+    S.history = [];
+    S.over = false;
+    S.thinking = false;
+    S.passes = 0;
+    S.last = null;
+    el.result.style.display = "none";
+    el.status.className = "st";
+    render();
+    if (S.mode === "ai" && S.humanColor !== BLACK) { maybeAI(); }
+  }
+
+  function setMode(m) {
+    S.mode = m;
+    document.querySelectorAll(".modes button").forEach(function (b) {
+      b.classList.toggle("on", b.getAttribute("data-mode") === m);
+    });
+    el.lvRow.style.display = m === "ai" ? "" : "none";
+    el.colorRow.style.display = m === "ai" ? "" : "none";
+    reset();
+  }
+
+  el.menuBtn.addEventListener("click", function () {
+    el.panel.style.display = el.panel.style.display === "none" ? "" : "none";
+  });
+
+  document.querySelectorAll(".modes button").forEach(function (b) {
+    b.addEventListener("click", function () { setMode(b.getAttribute("data-mode")); });
+  });
+
+  el.lvRow.querySelectorAll(".lv").forEach(function (b) {
+    b.addEventListener("click", function () {
+      S.level = +b.getAttribute("data-lv");
+      el.lvRow.querySelectorAll(".lv").forEach(function (x) { x.classList.remove("on"); });
+      b.classList.add("on");
+      toast("难度改为「" + W.LEVELS[S.level].name + "」");
+    });
+  });
+
+  el.colorRow.querySelectorAll(".lv").forEach(function (b) {
+    b.addEventListener("click", function () {
+      S.humanColor = +b.getAttribute("data-color");
+      el.colorRow.querySelectorAll(".lv").forEach(function (x) { x.classList.remove("on"); });
+      b.classList.add("on");
+      reset();
+    });
+  });
+
+  el.passBtn.addEventListener("click", function () {
+    if (S.over) { return; }
+    if (S.thinking) { toast("电脑还在想，稍等"); return; }
+    if (S.mode === "ai" && S.turn !== S.humanColor) { return; }
+    doPass(S.turn, false);
+  });
+
+  el.countBtn.addEventListener("click", function () {
+    if (S.over) { return; }
+    finish();
+  });
+
+  el.undoBtn.addEventListener("click", function () {
+    if (S.thinking) { toast("电脑还在想，稍等"); return; }
+    if (!S.history.length) { toast("还没下呢"); return; }
+
+    function pop() {
+      var h = S.history.pop();
+      S.board = h.b;
+      S.ko = h.ko;
+      S.turn = h.turn;
+      S.caps = h.caps;
+      S.last = h.last;
+      S.passes = h.passes;
+    }
+    pop();
+    if (S.mode === "ai") {
+      while (S.history.length && S.turn !== S.humanColor) { pop(); }
+    }
+    S.over = false;
+    S.thinking = false;
+    el.result.style.display = "none";
+    el.status.className = "st";
+    render();
+  });
+
+  el.restartBtn.addEventListener("click", function () { reset(); });
+
+  drawGrid();
+  el.lvRow.querySelector('.lv[data-lv="2"]').classList.add("on");
+  el.colorRow.querySelector('.lv[data-color="1"]').classList.add("on");
+  setMode("ai");
+  el.panel.style.display = "none";
+})();
+</script>
+</body>
+</html>
